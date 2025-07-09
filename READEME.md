@@ -1,5 +1,16 @@
 # 專案開發規劃書：單頁應用任務管理系統（ScheduleR）
 
+## 專案初始化狀態
+
+本專案已使用 Monorepo 架構初始化，目錄結構如下：
+
+-   `packages/client`: 前端 React 應用程式 (Vite + TypeScript)
+-   `packages/server`: 後端 Node.js 應用程式 (Express + TypeScript)
+
+開發任務已分派至各專案的 `README.md` 檔案中。
+
+---
+
 ## 一、專案簡介
 
 ScheduleR 是一套現代化的專案任務管理單頁應用（SPA），使用者可透過視覺化方式進行專案規劃、任務分派、進度追蹤與效能分析。其核心價值在於：高可用性、可視化與全鍵盤控制的效率操作體驗。
