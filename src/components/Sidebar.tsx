@@ -14,17 +14,41 @@ export default function Sidebar() {
   const [ongoingTasks, setOngoingTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    // Placeholder for fetching ongoing tasks from API
-    // In a real application, you would fetch tasks for the current sprint with status "Ongoing"
-    const fetchedTasks: Task[] = [
-      { id: "task1", title: "Implement Login", status: "Ongoing" },
-      { id: "task2", title: "Design Database", status: "Ongoing" },
-      { id: "task3", title: "Setup CI/CD", status: "Ongoing" },
-    ];
-    setOngoingTasks(fetchedTasks);
+    // Fetch ongoing tasks from API
+    const fetchOngoingTasks = async () => {
+      try {
+        // For now, we'll fetch all tasks and filter for ongoing ones
+        // In a real implementation, you'd have a sprint context or selected sprint
+        const response = await fetch('/api/tasks?status=Ongoing');
+        if (response.ok) {
+          const tasks = await response.json();
+          setOngoingTasks(tasks);
+        } else {
+          console.error('Failed to fetch ongoing tasks');
+          // Fallback to mock data
+          const mockTasks: Task[] = [
+            { id: "task1", title: "Implement Login", status: "Ongoing" },
+            { id: "task2", title: "Design Database", status: "Ongoing" },
+            { id: "task3", title: "Setup CI/CD", status: "Ongoing" },
+          ];
+          setOngoingTasks(mockTasks);
+        }
+      } catch (error) {
+        console.error('Error fetching ongoing tasks:', error);
+        // Fallback to mock data
+        const mockTasks: Task[] = [
+          { id: "task1", title: "Implement Login", status: "Ongoing" },
+          { id: "task2", title: "Design Database", status: "Ongoing" },
+          { id: "task3", title: "Setup CI/CD", status: "Ongoing" },
+        ];
+        setOngoingTasks(mockTasks);
+      }
+    };
+
+    fetchOngoingTasks();
   }, []);
 
-  const onDragEnd = (result: any) => {
+  const onDragEnd = async (result: any) => {
     const { destination, source, draggableId } = result;
 
     if (!destination) {
@@ -42,14 +66,28 @@ export default function Sidebar() {
     const [reorderedItem] = newTasks.splice(source.index, 1);
     newTasks.splice(destination.index, 0, reorderedItem);
 
+    // Optimistically update the UI
     setOngoingTasks(newTasks);
 
-    // Placeholder for updating task order via API
-    // fetch("/api/tasks/reorder", {
-    //   method: "PUT",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ tasks: newTasks.map(task => task.id) }),
-    // });
+    // Update task order via API
+    try {
+      const response = await fetch("/api/tasks/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskIds: newTasks.map(task => task.id) }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to reorder tasks');
+        // Revert the optimistic update on failure
+        // In a real app, you might want to show a toast notification
+        window.location.reload(); // Simple revert for now
+      }
+    } catch (error) {
+      console.error('Error reordering tasks:', error);
+      // Revert the optimistic update on failure
+      window.location.reload(); // Simple revert for now
+    }
   };
 
   return (

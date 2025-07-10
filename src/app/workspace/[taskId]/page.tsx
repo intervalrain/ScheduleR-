@@ -5,6 +5,11 @@ import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { PlusIcon, CheckIcon, ClockIcon, TagIcon } from "lucide-react";
 
 interface Task {
   id: string;
@@ -17,6 +22,8 @@ interface Task {
   status: string;
   subTasks?: SubTask[];
   notes?: Note[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface SubTask {
@@ -28,6 +35,7 @@ interface SubTask {
 interface Note {
   id: string;
   content: string;
+  createdAt?: string;
 }
 
 export default function WorkspacePage() {
@@ -123,71 +131,185 @@ export default function WorkspacePage() {
   };
 
   if (!task) {
-    return <div className="p-6">Loading task...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading task...</p>
+        </div>
+      </div>
+    );
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Pending": return "bg-yellow-100 text-yellow-800";
+      case "Ongoing": return "bg-blue-100 text-blue-800";
+      case "Done": return "bg-green-100 text-green-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "High": return "bg-red-100 text-red-800";
+      case "Medium": return "bg-orange-100 text-orange-800";
+      case "Low": return "bg-green-100 text-green-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">{task.name}</h1>
-      <p className="text-gray-600 mb-4">Status: {task.status}</p>
-
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Description</h2>
-        <p>{task.description}</p>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Details</h2>
-        <ul>
-          <li>Estimate: {task.estimateHours} hours</li>
-          <li>Priority: {task.priority}</li>
-          <li>Tags: {task.tags?.join(", ")}</li>
-          <li>Labels: {task.labels?.join(", ")}</li>
-        </ul>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Sub-tasks</h2>
-        <ul>
-          {task.subTasks?.map((subTask) => (
-            <li key={subTask.id} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={subTask.isCompleted}
-                onChange={() => handleToggleSubTask(subTask.id)}
-              />
-              <span>{subTask.title}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="flex gap-2 mt-2">
-          <Input
-            placeholder="New sub-task title"
-            value={newSubTaskTitle}
-            onChange={(e) => setNewSubTaskTitle(e.target.value)}
-          />
-          <Button onClick={handleAddSubTask}>Add Sub-task</Button>
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Notes</h2>
-        <div>
-          {task.notes?.map((note) => (
-            <div key={note.id} className="border p-3 mb-2 rounded">
-              {note.content}
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="space-y-4">
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-foreground">{task.name}</h1>
+            <div className="flex items-center gap-2">
+              <Badge className={getStatusColor(task.status)}>
+                {task.status}
+              </Badge>
+              {task.priority && (
+                <Badge className={getPriorityColor(task.priority)}>
+                  {task.priority} Priority
+                </Badge>
+              )}
+              {task.estimateHours && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <ClockIcon className="w-3 h-3" />
+                  {task.estimateHours}h
+                </Badge>
+              )}
             </div>
-          ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-2 mt-2">
-          <Textarea
-            placeholder="New note content"
-            value={newNoteContent}
-            onChange={(e) => setNewNoteContent(e.target.value)}
-          />
-          <Button onClick={handleAddNote}>Add Note</Button>
-        </div>
+
+        {task.description && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Description</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground leading-relaxed">{task.description}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Tags and Labels */}
+        {(task.tags?.length || task.labels?.length) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TagIcon className="w-4 h-4" />
+                Tags & Labels
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {task.tags?.length && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Tags:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {task.tags.map((tag, index) => (
+                      <Badge key={index} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {task.labels?.length && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Labels:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {task.labels.map((label, index) => (
+                      <Badge key={index} variant="outline">
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {/* Sub-tasks Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Sub-tasks</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            {task.subTasks?.map((subTask) => (
+              <div key={subTask.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+                <Checkbox
+                  checked={subTask.isCompleted}
+                  onCheckedChange={() => handleToggleSubTask(subTask.id)}
+                />
+                <span className={`flex-1 ${subTask.isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                  {subTask.title}
+                </span>
+                {subTask.isCompleted && (
+                  <CheckIcon className="w-4 h-4 text-green-600" />
+                )}
+              </div>
+            ))}
+          </div>
+          
+          <Separator />
+          
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add a new sub-task..."
+              value={newSubTaskTitle}
+              onChange={(e) => setNewSubTaskTitle(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAddSubTask()}
+              className="flex-1"
+            />
+            <Button onClick={handleAddSubTask} size="sm">
+              <PlusIcon className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Notes Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Notes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            {task.notes?.map((note) => (
+              <div key={note.id} className="p-4 rounded-lg border bg-muted/30">
+                <p className="text-foreground whitespace-pre-wrap">{note.content}</p>
+                {note.createdAt && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {new Date(note.createdAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          <Separator />
+          
+          <div className="space-y-2">
+            <Textarea
+              placeholder="Add a note..."
+              value={newNoteContent}
+              onChange={(e) => setNewNoteContent(e.target.value)}
+              className="min-h-[100px]"
+            />
+            <Button onClick={handleAddNote} size="sm">
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Note
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

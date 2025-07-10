@@ -36,7 +36,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <div className="flex min-h-[calc(100vh-73px)]">
+      <div className="flex min-h-[calc(100vh-120px)]">
         <Sidebar />
         <main className="flex-1 p-8 bg-background">
           {children}
