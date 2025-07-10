@@ -53,12 +53,16 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 p-4 border-r">
-      <h2 className="text-lg font-semibold mb-4">Ongoing Tasks</h2>
+    <aside className="w-64 p-6 bg-sidebar border-r border-sidebar-border">
+      <div className="mb-6">
+        <h2 className="text-sm font-medium text-sidebar-foreground uppercase tracking-wider">
+          Ongoing Tasks
+        </h2>
+      </div>
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="ongoing-tasks">
           {(provided) => (
-            <div {...provided.droppableProps} ref={provided.innerRef}>
+            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
               {ongoingTasks.map((task, index) => (
                 <Draggable key={task.id} draggableId={task.id} index={index}>
                   {(provided) => (
@@ -67,9 +71,14 @@ export default function Sidebar() {
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
-                        className="bg-white p-3 mb-2 rounded shadow cursor-pointer hover:bg-gray-50"
+                        className="group bg-white p-3 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-all duration-200 border border-border/40 hover:border-primary/20"
                       >
-                        {task.title}
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 bg-primary rounded-full opacity-60 group-hover:opacity-100 transition-opacity"></div>
+                          <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                            {task.title}
+                          </span>
+                        </div>
                       </div>
                     </Link>
                   )}

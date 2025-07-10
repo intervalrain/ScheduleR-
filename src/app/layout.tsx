@@ -7,6 +7,8 @@ import { SessionProvider } from "next-auth/react";
 import { NewTaskDialogProvider, useNewTaskDialog } from "@/components/NewTaskDialogProvider";
 import { useHotkeys } from "react-hotkeys-hook";
 import { CommandPalette } from "@/components/CommandPalette";
+import Header from "@/components/Header";
+import Sidebar from "@/components/Sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,10 +34,16 @@ function AppProviders({ children }: { children: React.ReactNode }) {
   });
 
   return (
-    <>
-      {children}
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="flex min-h-[calc(100vh-73px)]">
+        <Sidebar />
+        <main className="flex-1 p-8 bg-background">
+          {children}
+        </main>
+      </div>
       <CommandPalette />
-    </>
+    </div>
   );
 }
 

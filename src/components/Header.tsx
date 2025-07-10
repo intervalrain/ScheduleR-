@@ -18,10 +18,14 @@ export default function Header() {
   const { openNewTaskDialog } = useNewTaskDialog();
 
   return (
-    <header className="flex items-center justify-between p-4 border-b">
-      <div className="flex items-center gap-4">
+    <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-border/60 backdrop-blur-sm">
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-foreground">ScheduleR</h1>
+          <div className="h-6 w-px bg-border"></div>
+        </div>
         <Select>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] border-border/60 bg-white hover:bg-muted/50 transition-colors">
             <SelectValue placeholder="Select a sprint" />
           </SelectTrigger>
           <SelectContent>
@@ -35,7 +39,12 @@ export default function Header() {
         <NewSprintDialog />
       </div>
       <div>
-        <Button onClick={openNewTaskDialog}>New Task</Button>
+        <Button 
+          onClick={openNewTaskDialog} 
+          className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-medium"
+        >
+          New Task
+        </Button>
       </div>
     </header>
   );
