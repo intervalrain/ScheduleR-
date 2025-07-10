@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,59 +9,130 @@ datasource db {
 }
 
 model User {
-  id        String       @id @default(cuid())
-  email     String       @unique
-  name      String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  teams     TeamsOnUsers[]
-  tasks     Task[]       @relation("Assignee")
+  id            String          @id @default(cuid())
+  name          String?
+  email         String          @unique
+  emailVerified DateTime?
+  image         String?
+  teams         TeamsOnUsers[]
+  CalendarEvent CalendarEvent[]
+  accounts      Account[]
+  sessions      Session[]
+  assignedTasks Task[]
 }
 
 model Team {
-  id        String       @id @default(cuid())
-  name      String
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  users     TeamsOnUsers[]
-  sprints   Sprint[]
+  id      String         @id @default(cuid())
+  name    String
+  users   TeamsOnUsers[]
+  sprints Sprint[]
 }
 
 model TeamsOnUsers {
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  team      Team     @relation(fields: [teamId], references: [id])
-  teamId    String
-  assignedAt DateTime @default(now())
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+  team   Team   @relation(fields: [teamId], references: [id])
+  teamId String
 
   @@id([userId, teamId])
 }
 
 model Sprint {
-  id        String   @id @default(cuid())
-  name      String
-  startDate DateTime
-  endDate   DateTime
-  team      Team     @relation(fields: [teamId], references: [id])
-  teamId    String
-  tasks     Task[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  startDate  DateTime
+  endDate    DateTime
+  iterations Int?
+  team       Team     @relation(fields: [teamId], references: [id])
+  teamId     String
+  tasks      Task[]
 }
 
 model Task {
-  id           String   @id @default(cuid())
-  title        String
-  description  String?
-  status       String   // e.g., 'TODO', 'IN_PROGRESS', 'DONE'
-  sprint       Sprint   @relation(fields: [sprintId], references: [id])
-  sprintId     String
-  assignee     User?    @relation("Assignee", fields: [assigneeId], references: [id])
-  assigneeId   String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String       @id @default(cuid())
+  sprint          Sprint       @relation(fields: [sprintId], references: [id])
+  sprintId        String
+  name            String
+  description     String?
+  estimateHours   Float?
+  priority        String?
+  tags            String[]
+  labels          String[]
+  status          String
+  dependencies    Dependency[] @relation("TaskDependencies")
+  dependencyFor   Dependency[] @relation("TaskDependencyFor")
+  subTasks        SubTask[]
+  notes           Note[]
+  assignee        User?        @relation(fields: [assigneeId], references: [id])
+  assigneeId      String?
+}
 
-  // For task dependencies: a task can have many dependencies, and can be a dependency for many other tasks
-  dependsOn    Task[] @relation("TaskDependencies")
-  dependencyOf Task[] @relation("TaskDependencies")
+model Dependency {
+  taskId         String @id
+  dependsOnTaskId String
+  task            Task   @relation("TaskDependencies", fields: [taskId], references: [id])
+  dependsOn       Task   @relation("TaskDependencyFor", fields: [dependsOnTaskId], references: [id])
+}
+
+model SubTask {
+  id          String @id @default(cuid())
+  task        Task   @relation(fields: [taskId], references: [id])
+  taskId      String
+  title       String
+  isCompleted Boolean
+}
+
+model Note {
+  id      String @id @default(cuid())
+  task    Task   @relation(fields: [taskId], references: [id])
+  taskId  String
+  content String
+}
+
+model CalendarEvent {
+  id          String  @id @default(cuid())
+  user        User    @relation(fields: [userId], references: [id])
+  userId      String
+  type        String
+  title       String
+  start       DateTime
+  end         DateTime
+  isRecurring Boolean?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
