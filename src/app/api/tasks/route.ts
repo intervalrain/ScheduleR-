@@ -1,17 +1,41 @@
 
 import { NextResponse } from 'next/server';
+import { getServerSession } from "next-auth";
 import prisma from '@/lib/prisma';
 import { NextRequest } from 'next/server';
 
 // GET /api/tasks
 export async function GET(request: NextRequest) {
+  const session = await getServerSession();
+
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const sprintId = searchParams.get('sprintId');
   const status = searchParams.get('status');
 
   try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
     // Build where clause dynamically
-    const whereClause: any = {};
+    const whereClause: {
+      OR: Array<{ createdById?: string; assigneeId?: string }>;
+      sprintId?: string;
+      status?: string;
+    } = {
+      OR: [
+        { createdById: user.id },
+        { assigneeId: user.id },
+      ]
+    };
     
     if (sprintId) {
       whereClause.sprintId = String(sprintId);
@@ -21,15 +45,25 @@ export async function GET(request: NextRequest) {
       whereClause.status = status;
     }
 
-    // If no filters provided, return error for now to avoid fetching all tasks
-    if (!sprintId && !status) {
-      return NextResponse.json({ error: 'At least one filter (sprintId or status) is required' }, { status: 400 });
-    }
-
     const tasks = await prisma.task.findMany({
       where: whereClause,
       include: {
-        assignee: true,
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        },
         dependsOn: true,
         dependencyOf: true,
       },
@@ -46,21 +80,57 @@ export async function GET(request: NextRequest) {
 
 // POST /api/tasks
 export async function POST(request: Request) {
-  const { title, description, status, sprintId, assigneeId } = await request.json();
+  const session = await getServerSession();
 
-  if (!title || !sprintId) {
-    return NextResponse.json({ error: 'Title and sprintId are required' }, { status: 400 });
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const { name, title, description, status, sprintId, assigneeId, estimate, estimatedHours } = await request.json();
+
+  const taskTitle = name || title;
+  if (!taskTitle) {
+    return NextResponse.json({ error: 'Task name/title is required' }, { status: 400 });
   }
 
   try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
     const newTask = await prisma.task.create({
       data: {
-        title,
-        description,
+        title: taskTitle,
+        description: description || null,
         status: status || 'TODO',
-        sprint: { connect: { id: sprintId } },
+        priority: 'MEDIUM',
+        estimatedHours: estimate || estimatedHours || null,
+        createdById: user.id,
+        ...(sprintId && { sprint: { connect: { id: sprintId } } }),
         ...(assigneeId && { assignee: { connect: { id: assigneeId } } }),
       },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        }
+      }
     });
     return NextResponse.json(newTask, { status: 201 });
   } catch (error) {

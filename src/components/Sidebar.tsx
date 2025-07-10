@@ -48,8 +48,12 @@ export default function Sidebar() {
     fetchOngoingTasks();
   }, []);
 
-  const onDragEnd = async (result: any) => {
-    const { destination, source, draggableId } = result;
+  const onDragEnd = async (result: {
+    destination?: { droppableId: string; index: number } | null;
+    source: { droppableId: string; index: number };
+    draggableId: string;
+  }) => {
+    const { destination, source } = result;
 
     if (!destination) {
       return;
