@@ -1,11 +1,12 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from '@/lib/prisma';
 
 // PUT /api/tasks/{id}
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session || !session.user || !session.user.email) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

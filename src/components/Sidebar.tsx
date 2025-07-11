@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 interface Task {
@@ -11,25 +12,40 @@ interface Task {
 }
 
 export default function Sidebar() {
+  const { data: session, status } = useSession();
   const [ongoingTasks, setOngoingTasks] = useState<Task[]>([]);
 
   useEffect(() => {
+    // Only fetch if user is authenticated
+    if (status === "loading") return; // Still loading
+    if (!session) {
+      // Not authenticated, use mock data
+      const mockTasks: Task[] = [
+        { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
+        { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
+        { id: "task3", title: "Setup CI/CD", status: "IN_PROGRESS" },
+      ];
+      setOngoingTasks(mockTasks);
+      return;
+    }
+
     // Fetch ongoing tasks from API
     const fetchOngoingTasks = async () => {
       try {
         // For now, we'll fetch all tasks and filter for ongoing ones
         // In a real implementation, you'd have a sprint context or selected sprint
-        const response = await fetch('/api/tasks?status=Ongoing');
+        const response = await fetch('/api/tasks?status=IN_PROGRESS');
         if (response.ok) {
           const tasks = await response.json();
           setOngoingTasks(tasks);
         } else {
-          console.error('Failed to fetch ongoing tasks');
+          const errorText = await response.text();
+          console.error('Failed to fetch ongoing tasks:', response.status, errorText);
           // Fallback to mock data
           const mockTasks: Task[] = [
-            { id: "task1", title: "Implement Login", status: "Ongoing" },
-            { id: "task2", title: "Design Database", status: "Ongoing" },
-            { id: "task3", title: "Setup CI/CD", status: "Ongoing" },
+            { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
+            { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
+            { id: "task3", title: "Setup CI/CD", status: "IN_PROGRESS" },
           ];
           setOngoingTasks(mockTasks);
         }
@@ -37,16 +53,16 @@ export default function Sidebar() {
         console.error('Error fetching ongoing tasks:', error);
         // Fallback to mock data
         const mockTasks: Task[] = [
-          { id: "task1", title: "Implement Login", status: "Ongoing" },
-          { id: "task2", title: "Design Database", status: "Ongoing" },
-          { id: "task3", title: "Setup CI/CD", status: "Ongoing" },
+          { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
+          { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
+          { id: "task3", title: "Setup CI/CD", status: "IN_PROGRESS" },
         ];
         setOngoingTasks(mockTasks);
       }
     };
 
     fetchOngoingTasks();
-  }, []);
+  }, [session, status]);
 
   const onDragEnd = async (result: {
     destination?: { droppableId: string; index: number } | null;

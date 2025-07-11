@@ -1,12 +1,13 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from '@/lib/prisma';
 import { NextRequest } from 'next/server';
 
 // GET /api/tasks
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session || !session.user || !session.user.email) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -26,11 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build where clause dynamically
-    const whereClause: {
-      OR: Array<{ createdById?: string; assigneeId?: string }>;
-      sprintId?: string;
-      status?: string;
-    } = {
+    const whereClause: any = {
       OR: [
         { createdById: user.id },
         { assigneeId: user.id },
@@ -64,13 +61,18 @@ export async function GET(request: NextRequest) {
             image: true,
           }
         },
-        dependsOn: true,
-        dependencyOf: true,
+        sprint: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
+    
     return NextResponse.json(tasks);
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/tasks
 export async function POST(request: Request) {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session || !session.user || !session.user.email) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,128 +10,388 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { PlusIcon, CheckIcon, ClockIcon, TagIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  PlusIcon, 
+  CheckIcon, 
+  ClockIcon, 
+  TagIcon, 
+  EditIcon, 
+  SaveIcon, 
+  XIcon,
+  UserIcon,
+  CalendarIcon,
+  AlertCircleIcon,
+  HistoryIcon,
+  LinkIcon,
+  Trash2Icon
+} from "lucide-react";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  image?: string;
+}
 
 interface Task {
   id: string;
-  name: string;
+  title: string;
   description?: string;
-  estimateHours?: number;
+  estimatedHours?: number;
   priority?: string;
   tags?: string[];
-  labels?: string[];
   status: string;
+  createdAt: string;
+  updatedAt: string;
+  assignee?: User;
+  createdBy?: User;
   subTasks?: SubTask[];
   notes?: Note[];
-  createdAt?: string;
-  updatedAt?: string;
+  dependsOn?: Array<{ task: { id: string; title: string; status: string } }>;
+  dependencyOf?: Array<{ dependsOn: { id: string; title: string; status: string } }>;
 }
 
 interface SubTask {
   id: string;
   title: string;
   isCompleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: User;
 }
 
 interface Note {
   id: string;
   content: string;
-  createdAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: User;
 }
 
 export default function WorkspacePage() {
   const params = useParams();
+  const router = useRouter();
+  const { data: session } = useSession();
   const taskId = params.taskId as string;
+  
+  // Task state
   const [task, setTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    status: '',
+    priority: '',
+    estimatedHours: 0
+  });
+  
+  // Sub-task state
   const [newSubTaskTitle, setNewSubTaskTitle] = useState("");
+  const [editingSubTask, setEditingSubTask] = useState<string | null>(null);
+  const [editSubTaskTitle, setEditSubTaskTitle] = useState("");
+  
+  // Note state
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState("");
+  
+  // Activity tracking
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (taskId) {
-      fetch(`/api/workspace/task/${taskId}`)
-        .then((res) => res.json())
-        .then((data) => setTask(data));
+    if (taskId && session) {
+      fetchTask();
     }
-  }, [taskId]);
+  }, [taskId, session]);
+
+  useEffect(() => {
+    if (task) {
+      setEditForm({
+        title: task.title || '',
+        description: task.description || '',
+        status: task.status || '',
+        priority: task.priority || '',
+        estimatedHours: task.estimatedHours || 0
+      });
+    }
+  }, [task]);
+
+  const fetchTask = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`/api/workspace/task/${taskId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch task');
+      }
+      
+      const data = await response.json();
+      setTask(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showSaveMessage = (message: string) => {
+    setSaveMessage(message);
+    setTimeout(() => setSaveMessage(null), 3000);
+  };
+
+  const handleSaveTask = async () => {
+    if (!task) return;
+    
+    try {
+      const response = await fetch(`/api/workspace/task/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update task');
+      }
+      
+      const updatedTask = await response.json();
+      setTask({ ...task, ...updatedTask });
+      setIsEditing(false);
+      showSaveMessage('Task updated successfully!');
+    } catch (err) {
+      console.error('Error updating task:', err);
+      showSaveMessage('Failed to update task');
+    }
+  };
 
   const handleAddSubTask = async () => {
     if (!newSubTaskTitle.trim() || !task) return;
 
-    // Placeholder for API call to add sub-task
-    // const response = await fetch(`/api/tasks/${task.id}/subtasks`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ title: newSubTaskTitle }),
-    // });
-    // const newSubTask = await response.json();
-
-    // Mock update
-    const newSubTask: SubTask = {
-      id: String(task.subTasks?.length || 0) + Date.now(),
-      title: newSubTaskTitle,
-      isCompleted: false,
-    };
-
-    setTask((prevTask) => {
-      if (!prevTask) return null;
-      return {
-        ...prevTask,
-        subTasks: [...(prevTask.subTasks || []), newSubTask],
-      };
-    });
-    setNewSubTaskTitle("");
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/subtasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newSubTaskTitle }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create subtask');
+      }
+      
+      const newSubTask = await response.json();
+      
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          subTasks: [...(prevTask.subTasks || []), newSubTask],
+        };
+      });
+      setNewSubTaskTitle("");
+      showSaveMessage('Subtask added successfully!');
+    } catch (err) {
+      console.error('Error creating subtask:', err);
+      showSaveMessage('Failed to create subtask');
+    }
   };
 
   const handleToggleSubTask = async (subTaskId: string) => {
     if (!task) return;
 
-    // Placeholder for API call to update sub-task status
-    // const response = await fetch(`/api/tasks/${task.id}/subtasks/${subTaskId}`, {
-    //   method: "PUT",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ isCompleted: !subTask.isCompleted }),
-    // });
-    // const updatedSubTask = await response.json();
+    const subTask = task.subTasks?.find(st => st.id === subTaskId);
+    if (!subTask) return;
 
-    setTask((prevTask) => {
-      if (!prevTask) return null;
-      return {
-        ...prevTask,
-        subTasks: prevTask.subTasks?.map((st) =>
-          st.id === subTaskId ? { ...st, isCompleted: !st.isCompleted } : st
-        ),
-      };
-    });
+    try {
+      const response = await fetch(`/api/subtasks/${subTaskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isCompleted: !subTask.isCompleted }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update subtask');
+      }
+
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          subTasks: prevTask.subTasks?.map((st) =>
+            st.id === subTaskId ? { ...st, isCompleted: !st.isCompleted } : st
+          ),
+        };
+      });
+      showSaveMessage(`Subtask ${subTask.isCompleted ? 'unchecked' : 'completed'}!`);
+    } catch (err) {
+      console.error('Error updating subtask:', err);
+      showSaveMessage('Failed to update subtask');
+    }
+  };
+
+  const handleEditSubTask = async (subTaskId: string) => {
+    if (!editSubTaskTitle.trim()) return;
+    
+    try {
+      const response = await fetch(`/api/subtasks/${subTaskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editSubTaskTitle }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update subtask');
+      }
+
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          subTasks: prevTask.subTasks?.map((st) =>
+            st.id === subTaskId ? { ...st, title: editSubTaskTitle } : st
+          ),
+        };
+      });
+      setEditingSubTask(null);
+      setEditSubTaskTitle("");
+      showSaveMessage('Subtask updated successfully!');
+    } catch (err) {
+      console.error('Error updating subtask:', err);
+      showSaveMessage('Failed to update subtask');
+    }
+  };
+
+  const handleDeleteSubTask = async (subTaskId: string) => {
+    if (!confirm('Are you sure you want to delete this subtask?')) return;
+    
+    try {
+      const response = await fetch(`/api/subtasks/${subTaskId}`, {
+        method: "DELETE"
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete subtask');
+      }
+
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          subTasks: prevTask.subTasks?.filter((st) => st.id !== subTaskId),
+        };
+      });
+      showSaveMessage('Subtask deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting subtask:', err);
+      showSaveMessage('Failed to delete subtask');
+    }
   };
 
   const handleAddNote = async () => {
     if (!newNoteContent.trim() || !task) return;
 
-    // Placeholder for API call to add note
-    // const response = await fetch(`/api/tasks/${task.id}/notes`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ content: newNoteContent }),
-    // });
-    // const newNote = await response.json();
-
-    // Mock update
-    const newNote: Note = {
-      id: String(task.notes?.length || 0) + Date.now(),
-      content: newNoteContent,
-    };
-
-    setTask((prevTask) => {
-      if (!prevTask) return null;
-      return {
-        ...prevTask,
-        notes: [...(prevTask.notes || []), newNote],
-      };
-    });
-    setNewNoteContent("");
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newNoteContent }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create note');
+      }
+      
+      const newNote = await response.json();
+      
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          notes: [newNote, ...(prevTask.notes || [])],
+        };
+      });
+      setNewNoteContent("");
+      showSaveMessage('Note added successfully!');
+    } catch (err) {
+      console.error('Error creating note:', err);
+      showSaveMessage('Failed to create note');
+    }
   };
 
-  if (!task) {
+  const handleEditNote = async (noteId: string) => {
+    if (!editNoteContent.trim()) return;
+    
+    try {
+      const response = await fetch(`/api/notes/${noteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editNoteContent }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update note');
+      }
+
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          notes: prevTask.notes?.map((note) =>
+            note.id === noteId ? { ...note, content: editNoteContent } : note
+          ),
+        };
+      });
+      setEditingNote(null);
+      setEditNoteContent("");
+      showSaveMessage('Note updated successfully!');
+    } catch (err) {
+      console.error('Error updating note:', err);
+      showSaveMessage('Failed to update note');
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!confirm('Are you sure you want to delete this note?')) return;
+    
+    try {
+      const response = await fetch(`/api/notes/${noteId}`, {
+        method: "DELETE"
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete note');
+      }
+
+      setTask((prevTask) => {
+        if (!prevTask) return null;
+        return {
+          ...prevTask,
+          notes: prevTask.notes?.filter((note) => note.id !== noteId),
+        };
+      });
+      showSaveMessage('Note deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting note:', err);
+      showSaveMessage('Failed to delete note');
+    }
+  };
+
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-muted-foreground">Please sign in to view task details.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -141,95 +402,318 @@ export default function WorkspacePage() {
     );
   }
 
+  if (error || !task) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-muted-foreground mb-4">{error || 'Task not found'}</p>
+          <Button onClick={() => router.back()} variant="outline">
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Pending": return "bg-yellow-100 text-yellow-800";
-      case "Ongoing": return "bg-blue-100 text-blue-800";
-      case "Done": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "TODO": return "default";
+      case "IN_PROGRESS": return "secondary";
+      case "DONE": return "outline";
+      default: return "default";
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "High": return "bg-red-100 text-red-800";
-      case "Medium": return "bg-orange-100 text-orange-800";
-      case "Low": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "HIGH": return "destructive";
+      case "MEDIUM": return "default";
+      case "LOW": return "secondary";
+      default: return "outline";
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getProgressPercentage = () => {
+    if (!task.subTasks || task.subTasks.length === 0) return 0;
+    const completed = task.subTasks.filter(st => st.isCompleted).length;
+    return Math.round((completed / task.subTasks.length) * 100);
   };
 
   return (
     <div className="space-y-6">
+      {/* Save Message */}
+      {saveMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+          {saveMessage}
+        </div>
+      )}
+      
       {/* Header Section */}
       <div className="space-y-4">
         <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">{task.name}</h1>
-            <div className="flex items-center gap-2">
-              <Badge className={getStatusColor(task.status)}>
-                {task.status}
-              </Badge>
-              {task.priority && (
-                <Badge className={getPriorityColor(task.priority)}>
-                  {task.priority} Priority
-                </Badge>
-              )}
-              {task.estimateHours && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <ClockIcon className="w-3 h-3" />
-                  {task.estimateHours}h
-                </Badge>
-              )}
-            </div>
+          <div className="space-y-2 flex-1">
+            {isEditing ? (
+              <div className="space-y-4">
+                <Input
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                  className="text-2xl font-bold"
+                  placeholder="Task title"
+                />
+                <div className="flex gap-2">
+                  <Select value={editForm.status} onValueChange={(value) => setEditForm({...editForm, status: value})}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TODO">To Do</SelectItem>
+                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                      <SelectItem value="DONE">Done</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={editForm.priority} onValueChange={(value) => setEditForm({...editForm, priority: value})}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="HIGH">High</SelectItem>
+                      <SelectItem value="MEDIUM">Medium</SelectItem>
+                      <SelectItem value="LOW">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    value={editForm.estimatedHours}
+                    onChange={(e) => setEditForm({...editForm, estimatedHours: parseInt(e.target.value) || 0})}
+                    placeholder="Hours"
+                    className="w-20"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">{task.title}</h1>
+                <div className="flex items-center gap-2">
+                  <Badge variant={getStatusColor(task.status) as any}>
+                    {task.status.replace('_', ' ')}
+                  </Badge>
+                  {task.priority && (
+                    <Badge variant={getPriorityColor(task.priority) as any}>
+                      {task.priority} Priority
+                    </Badge>
+                  )}
+                  {task.estimatedHours && (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <ClockIcon className="w-3 h-3" />
+                      {task.estimatedHours}h
+                    </Badge>
+                  )}
+                  {task.subTasks && task.subTasks.length > 0 && (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <CheckIcon className="w-3 h-3" />
+                      {getProgressPercentage()}% Complete
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
+            {isEditing ? (
+              <>
+                <Button onClick={handleSaveTask} size="sm">
+                  <SaveIcon className="w-4 h-4 mr-2" />
+                  Save
+                </Button>
+                <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
+                  <XIcon className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                <EditIcon className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+            )}
           </div>
         </div>
+        
+        {/* Task Metadata */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="flex items-center gap-2">
+                <UserIcon className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Created by</p>
+                  <div className="flex items-center gap-2">
+                    {task.createdBy && (
+                      <>
+                        <Avatar className="w-5 h-5">
+                          <AvatarImage src={task.createdBy.image || ''} alt={task.createdBy.name} />
+                          <AvatarFallback className="text-xs">
+                            {task.createdBy.name?.charAt(0) || task.createdBy.email?.charAt(0) || 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{task.createdBy.name || task.createdBy.email}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <UserIcon className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Assigned to</p>
+                  <div className="flex items-center gap-2">
+                    {task.assignee ? (
+                      <>
+                        <Avatar className="w-5 h-5">
+                          <AvatarImage src={task.assignee.image || ''} alt={task.assignee.name} />
+                          <AvatarFallback className="text-xs">
+                            {task.assignee.name?.charAt(0) || task.assignee.email?.charAt(0) || 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{task.assignee.name || task.assignee.email}</span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Unassigned</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Created</p>
+                  <p className="text-sm">{formatDate(task.createdAt)}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <HistoryIcon className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Updated</p>
+                  <p className="text-sm">{formatDate(task.updatedAt)}</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {task.description && (
+        {/* Description Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Description</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isEditing ? (
+              <Textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                placeholder="Task description..."
+                className="min-h-[100px]"
+              />
+            ) : (
+              <div className="prose prose-sm max-w-none">
+                {task.description ? (
+                  <p className="text-foreground leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                ) : (
+                  <p className="text-muted-foreground italic">No description provided.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Dependencies Section */}
+        {(task.dependsOn?.length || task.dependencyOf?.length) && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Description</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <LinkIcon className="w-4 h-4" />
+                Dependencies
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">{task.description}</p>
+            <CardContent className="space-y-4">
+              {task.dependsOn?.length && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Depends on:</p>
+                  <div className="space-y-2">
+                    {task.dependsOn.map((dep, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 rounded border">
+                        <Badge variant={getStatusColor(dep.task.status) as any} className="text-xs">
+                          {dep.task.status}
+                        </Badge>
+                        <Button 
+                          variant="link" 
+                          className="p-0 h-auto text-sm"
+                          onClick={() => router.push(`/workspace/${dep.task.id}`)}
+                        >
+                          {dep.task.title}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {task.dependencyOf?.length && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Blocking:</p>
+                  <div className="space-y-2">
+                    {task.dependencyOf.map((dep, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 rounded border">
+                        <Badge variant={getStatusColor(dep.dependsOn.status) as any} className="text-xs">
+                          {dep.dependsOn.status}
+                        </Badge>
+                        <Button 
+                          variant="link" 
+                          className="p-0 h-auto text-sm"
+                          onClick={() => router.push(`/workspace/${dep.dependsOn.id}`)}
+                        >
+                          {dep.dependsOn.title}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* Tags and Labels */}
-        {(task.tags?.length || task.labels?.length) && (
+        {/* Tags Section */}
+        {task.tags?.length && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <TagIcon className="w-4 h-4" />
-                Tags & Labels
+                Tags
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {task.tags?.length && (
-                <div>
-                  <p className="text-sm font-medium mb-2">Tags:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {task.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {task.labels?.length && (
-                <div>
-                  <p className="text-sm font-medium mb-2">Labels:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {task.labels.map((label, index) => (
-                      <Badge key={index} variant="outline">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <CardContent className="pb-4">
+              <div className="flex flex-wrap gap-2">
+                {task.tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -238,24 +722,105 @@ export default function WorkspacePage() {
       {/* Sub-tasks Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Sub-tasks</CardTitle>
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Sub-tasks</span>
+            {task.subTasks && task.subTasks.length > 0 && (
+              <Badge variant="outline">
+                {task.subTasks.filter(st => st.isCompleted).length} of {task.subTasks.length} completed
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
             {task.subTasks?.map((subTask) => (
-              <div key={subTask.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+              <div key={subTask.id} className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
                 <Checkbox
                   checked={subTask.isCompleted}
                   onCheckedChange={() => handleToggleSubTask(subTask.id)}
                 />
-                <span className={`flex-1 ${subTask.isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                  {subTask.title}
-                </span>
-                {subTask.isCompleted && (
-                  <CheckIcon className="w-4 h-4 text-green-600" />
+                {editingSubTask === subTask.id ? (
+                  <div className="flex-1 flex gap-2">
+                    <Input
+                      value={editSubTaskTitle}
+                      onChange={(e) => setEditSubTaskTitle(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') handleEditSubTask(subTask.id);
+                        if (e.key === 'Escape') {
+                          setEditingSubTask(null);
+                          setEditSubTaskTitle("");
+                        }
+                      }}
+                      className="flex-1"
+                      autoFocus
+                    />
+                    <Button onClick={() => handleEditSubTask(subTask.id)} size="sm">
+                      <SaveIcon className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        setEditingSubTask(null);
+                        setEditSubTaskTitle("");
+                      }} 
+                      variant="outline" 
+                      size="sm"
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <span className={`block ${subTask.isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                        {subTask.title}
+                      </span>
+                      {subTask.createdBy && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <Avatar className="w-4 h-4">
+                            <AvatarImage src={subTask.createdBy.image || ''} alt={subTask.createdBy.name} />
+                            <AvatarFallback className="text-xs">
+                              {subTask.createdBy.name?.charAt(0) || subTask.createdBy.email?.charAt(0) || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-muted-foreground">
+                            {subTask.createdBy.name || subTask.createdBy.email} • {formatDate(subTask.createdAt)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                      <Button 
+                        onClick={() => {
+                          setEditingSubTask(subTask.id);
+                          setEditSubTaskTitle(subTask.title);
+                        }} 
+                        variant="ghost" 
+                        size="sm"
+                      >
+                        <EditIcon className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        onClick={() => handleDeleteSubTask(subTask.id)} 
+                        variant="ghost" 
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2Icon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    
+                    {subTask.isCompleted && (
+                      <CheckIcon className="w-4 h-4 text-green-600" />
+                    )}
+                  </>
                 )}
               </div>
             ))}
+            
+            {(!task.subTasks || task.subTasks.length === 0) && (
+              <p className="text-muted-foreground text-center py-4">No sub-tasks yet. Add one below!</p>
+            )}
           </div>
           
           <Separator />
@@ -268,7 +833,7 @@ export default function WorkspacePage() {
               onKeyPress={(e) => e.key === 'Enter' && handleAddSubTask()}
               className="flex-1"
             />
-            <Button onClick={handleAddSubTask} size="sm">
+            <Button onClick={handleAddSubTask} size="sm" disabled={!newSubTaskTitle.trim()}>
               <PlusIcon className="w-4 h-4" />
             </Button>
           </div>
@@ -278,32 +843,114 @@ export default function WorkspacePage() {
       {/* Notes Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Notes</CardTitle>
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Notes</span>
+            {task.notes && task.notes.length > 0 && (
+              <Badge variant="outline">
+                {task.notes.length} note{task.notes.length !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3">
+          <div className="space-y-4">
             {task.notes?.map((note) => (
-              <div key={note.id} className="p-4 rounded-lg border bg-muted/30">
-                <p className="text-foreground whitespace-pre-wrap">{note.content}</p>
-                {note.createdAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {new Date(note.createdAt).toLocaleString()}
-                  </p>
+              <div key={note.id} className="group p-4 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                {editingNote === note.id ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={editNoteContent}
+                      onChange={(e) => setEditNoteContent(e.target.value)}
+                      className="min-h-[100px]"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleEditNote(note.id)} size="sm">
+                        <SaveIcon className="w-4 h-4 mr-2" />
+                        Save
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          setEditingNote(null);
+                          setEditNoteContent("");
+                        }} 
+                        variant="outline" 
+                        size="sm"
+                      >
+                        <XIcon className="w-4 h-4 mr-2" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <p className="text-foreground whitespace-pre-wrap leading-relaxed">{note.content}</p>
+                        <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                          {note.createdBy && (
+                            <div className="flex items-center gap-1">
+                              <Avatar className="w-4 h-4">
+                                <AvatarImage src={note.createdBy.image || ''} alt={note.createdBy.name} />
+                                <AvatarFallback className="text-xs">
+                                  {note.createdBy.name?.charAt(0) || note.createdBy.email?.charAt(0) || 'U'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span>{note.createdBy.name || note.createdBy.email}</span>
+                            </div>
+                          )}
+                          <span>•</span>
+                          <span>{formatDate(note.createdAt)}</span>
+                          {note.updatedAt !== note.createdAt && (
+                            <>
+                              <span>•</span>
+                              <span>edited {formatDate(note.updatedAt)}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <Button 
+                          onClick={() => {
+                            setEditingNote(note.id);
+                            setEditNoteContent(note.content);
+                          }} 
+                          variant="ghost" 
+                          size="sm"
+                        >
+                          <EditIcon className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          onClick={() => handleDeleteNote(note.id)} 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2Icon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             ))}
+            
+            {(!task.notes || task.notes.length === 0) && (
+              <p className="text-muted-foreground text-center py-8">No notes yet. Add one below!</p>
+            )}
           </div>
           
           <Separator />
           
           <div className="space-y-2">
             <Textarea
-              placeholder="Add a note..."
+              placeholder="Add a note... (supports markdown)"
               value={newNoteContent}
               onChange={(e) => setNewNoteContent(e.target.value)}
               className="min-h-[100px]"
             />
-            <Button onClick={handleAddNote} size="sm">
+            <Button onClick={handleAddNote} size="sm" disabled={!newNoteContent.trim()}>
               <PlusIcon className="w-4 h-4 mr-2" />
               Add Note
             </Button>
