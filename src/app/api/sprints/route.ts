@@ -1,11 +1,45 @@
 
 import { NextResponse } from 'next/server';
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from '@/lib/prisma';
 
 // GET /api/sprints
 export async function GET() {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const sprints = await prisma.sprint.findMany();
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        teams: {
+          include: {
+            team: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    const teamIds = user.teams.map((teamUser) => teamUser.team.id);
+
+    const sprints = await prisma.sprint.findMany({
+      where: {
+        teamId: {
+          in: teamIds,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
     return NextResponse.json(sprints);
   } catch (error) {
     console.error('Error fetching sprints:', error);
@@ -15,19 +49,57 @@ export async function GET() {
 
 // POST /api/sprints
 export async function POST(request: Request) {
-  const { name, startDate, endDate, teamId } = await request.json();
+  const session = await getServerSession(authOptions);
 
-  if (!name || !startDate || !endDate || !teamId) {
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const { name, startDate, endDate } = await request.json();
+
+  if (!name || !startDate || !endDate) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
   try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // Create a default team if none exists
+    let team = await prisma.team.findFirst({
+      where: {
+        users: {
+          some: {
+            userId: user.id,
+          },
+        },
+      },
+    });
+
+    if (!team) {
+      team = await prisma.team.create({
+        data: {
+          name: 'Default Team',
+          users: {
+            create: {
+              userId: user.id,
+            },
+          },
+        },
+      });
+    }
+
     const newSprint = await prisma.sprint.create({
       data: {
         name,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
-        team: { connect: { id: teamId } },
+        teamId: team.id,
       },
     });
     return NextResponse.json(newSprint, { status: 201 });

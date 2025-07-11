@@ -16,7 +16,11 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { useSession } from "next-auth/react";
 
-export function NewSprintDialog() {
+interface NewSprintDialogProps {
+  onSprintCreated?: () => void;
+}
+
+export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +51,12 @@ export function NewSprintDialog() {
     setError(null);
     
     try {
+      console.log('Creating sprint:', {
+        name: name.trim(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
+      
       const response = await fetch('/api/sprints', {
         method: 'POST',
         headers: {
@@ -59,9 +69,12 @@ export function NewSprintDialog() {
         }),
       });
       
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create sprint');
+        console.error('Error response:', errorData);
+        throw new Error(errorData.message || errorData.error || 'Failed to create sprint');
       }
       
       // Reset form and close dialog
@@ -70,8 +83,10 @@ export function NewSprintDialog() {
       setEndDate(undefined);
       setOpen(false);
       
-      // Optionally trigger a refresh of the parent component
-      window.location.reload();
+      // Trigger callback to refresh sprints
+      if (onSprintCreated) {
+        onSprintCreated();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -88,7 +103,7 @@ export function NewSprintDialog() {
       <DialogTrigger asChild>
         <Button variant="outline">New Sprint</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Create a new sprint</DialogTitle>
@@ -115,7 +130,7 @@ export function NewSprintDialog() {
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="startDate">Start Date</Label>
                 <DatePicker 

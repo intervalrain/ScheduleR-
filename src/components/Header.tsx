@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -39,13 +40,73 @@ const navigationTabs = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon },
 ];
 
+interface Sprint {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+}
+
 export default function Header() {
-  // Placeholder for fetching sprints
-  const sprints = [{ id: "1", name: "Sprint 1" }];
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  const [sprintsLoading, setSprintsLoading] = useState(false);
   const { openNewTaskDialog } = useNewTaskDialog();
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
+
+  // Fetch sprints when user is authenticated
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session) {
+      setSprints([]);
+      return;
+    }
+
+    const fetchSprints = async () => {
+      setSprintsLoading(true);
+      try {
+        const response = await fetch('/api/sprints');
+        if (response.ok) {
+          const data = await response.json();
+          setSprints(data);
+          // Auto-select the first sprint if none selected
+          if (data.length > 0 && !selectedSprintId) {
+            setSelectedSprintId(data[0].id);
+          }
+        } else {
+          console.error('Failed to fetch sprints');
+        }
+      } catch (error) {
+        console.error('Error fetching sprints:', error);
+      } finally {
+        setSprintsLoading(false);
+      }
+    };
+
+    fetchSprints();
+  }, [session, status, selectedSprintId]);
+
+  const refreshSprints = async () => {
+    if (!session) return;
+    setSprintsLoading(true);
+    try {
+      const response = await fetch('/api/sprints');
+      if (response.ok) {
+        const data = await response.json();
+        setSprints(data);
+        // Auto-select the newly created sprint (first one)
+        if (data.length > 0) {
+          setSelectedSprintId(data[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing sprints:', error);
+    } finally {
+      setSprintsLoading(false);
+    }
+  };
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -67,11 +128,20 @@ export default function Header() {
             <h1 className="text-xl font-semibold text-foreground">ScheduleR</h1>
             <div className="h-6 w-px bg-border"></div>
           </div>
-          <Select>
+          <Select 
+            value={selectedSprintId || undefined} 
+            onValueChange={setSelectedSprintId}
+            disabled={sprintsLoading || !session}
+          >
             <SelectTrigger className="w-[180px] border-border/60 bg-white hover:bg-muted/50 transition-colors">
-              <SelectValue placeholder="Select a sprint" />
+              <SelectValue placeholder={sprintsLoading ? "Loading..." : "Select a sprint"} />
             </SelectTrigger>
             <SelectContent>
+              {sprints.length === 0 && !sprintsLoading && (
+                <SelectItem value="no-sprints" disabled>
+                  No sprints available
+                </SelectItem>
+              )}
               {sprints.map((sprint) => (
                 <SelectItem key={sprint.id} value={sprint.id}>
                   {sprint.name}
@@ -79,7 +149,7 @@ export default function Header() {
               ))}
             </SelectContent>
           </Select>
-          <NewSprintDialog />
+          <NewSprintDialog onSprintCreated={refreshSprints} />
         </div>
         <div className="flex items-center gap-3">
           {session && (
@@ -147,7 +217,7 @@ export default function Header() {
       </div>
 
       {/* Navigation tabs */}
-      <div className="px-6">
+      <div className="px-6 pb-3">
         <nav className="flex space-x-1" role="tablist">
           {navigationTabs.map((tab) => {
             const Icon = tab.icon;
