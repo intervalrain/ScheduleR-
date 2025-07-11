@@ -25,14 +25,19 @@ interface TeamMember {
 interface NewTaskDialogProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  selectedSprintId?: string;
 }
 
-export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
+export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDialogProps) {
   const { data: session } = useSession();
   const [taskName, setTaskName] = useState("");
   const [description, setDescription] = useState("");
   const [estimate, setEstimate] = useState("");
-  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [assigneeId, setAssigneeId] = useState<string>("unassigned");
+  const [priority, setPriority] = useState("MEDIUM");
+  const [status, setStatus] = useState("TODO");
+  const [tags, setTags] = useState("");
+  const [labels, setLabels] = useState("");
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,6 +46,8 @@ export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
       fetchTeamMembers();
       if (session.user?.id) {
         setAssigneeId(session.user.id);
+      } else {
+        setAssigneeId("unassigned");
       }
     }
   }, [isOpen, session]);
@@ -69,7 +76,12 @@ export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
           name: taskName,
           description,
           estimate: estimate ? parseInt(estimate) : null,
-          assigneeId: assigneeId || null,
+          assigneeId: assigneeId && assigneeId !== "unassigned" ? assigneeId : null,
+          priority,
+          status,
+          sprintId: selectedSprintId || null,
+          tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
+          labels: labels ? labels.split(',').map(label => label.trim()).filter(label => label) : [],
         }),
       });
 
@@ -77,7 +89,11 @@ export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
         setTaskName("");
         setDescription("");
         setEstimate("");
-        setAssigneeId(session?.user?.id || "");
+        setAssigneeId(session?.user?.id || "unassigned");
+        setPriority("MEDIUM");
+        setStatus("TODO");
+        setTags("");
+        setLabels("");
         setIsOpen(false);
         window.location.reload();
       } else {
@@ -139,6 +155,61 @@ export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="priority" className="text-right">
+              Priority
+            </label>
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="HIGH">🔴 High</SelectItem>
+                <SelectItem value="MEDIUM">🟡 Medium</SelectItem>
+                <SelectItem value="LOW">🟢 Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="status" className="text-right">
+              Status
+            </label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TODO">📋 To Do</SelectItem>
+                <SelectItem value="IN_PROGRESS">⚡ In Progress</SelectItem>
+                <SelectItem value="REVIEW">👀 Review</SelectItem>
+                <SelectItem value="DONE">✅ Done</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="tags" className="text-right">
+              Tags
+            </label>
+            <Input 
+              id="tags" 
+              className="col-span-3" 
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="frontend, backend, bug (comma separated)"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="labels" className="text-right">
+              Labels
+            </label>
+            <Input 
+              id="labels" 
+              className="col-span-3" 
+              value={labels}
+              onChange={(e) => setLabels(e.target.value)}
+              placeholder="urgent, feature, enhancement (comma separated)"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
             <label htmlFor="assignee" className="text-right">
               Assignee
             </label>
@@ -147,7 +218,7 @@ export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
                 <SelectValue placeholder="Select assignee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">
+                <SelectItem value="unassigned">
                   <div className="flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-muted-foreground" />
                     <span>Unassigned</span>
@@ -169,6 +240,14 @@ export function NewTaskDialog({ isOpen, setIsOpen }: NewTaskDialogProps) {
               </SelectContent>
             </Select>
           </div>
+          {selectedSprintId && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label className="text-right">Sprint</label>
+              <div className="col-span-3 text-sm text-muted-foreground">
+                Task will be added to the selected sprint
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button 

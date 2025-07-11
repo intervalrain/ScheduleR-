@@ -195,7 +195,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
           {session && (
             <Button 
-              onClick={openNewTaskDialog} 
+              onClick={() => openNewTaskDialog(selectedSprintId || undefined)} 
               className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-medium"
             >
               New Task

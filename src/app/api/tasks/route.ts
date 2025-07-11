@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { name, title, description, status, sprintId, assigneeId, estimate, estimatedHours } = await request.json();
+  const { name, title, description, status, sprintId, assigneeId, estimate, estimatedHours, priority, tags, labels } = await request.json();
 
   const taskTitle = name || title;
   if (!taskTitle) {
@@ -109,8 +109,10 @@ export async function POST(request: Request) {
         title: taskTitle,
         description: description || null,
         status: status || 'TODO',
-        priority: 'MEDIUM',
+        priority: priority || 'MEDIUM',
         estimatedHours: estimate || estimatedHours || null,
+        tags: tags || [],
+        labels: labels || [],
         createdById: user.id,
         ...(sprintId && { sprint: { connect: { id: sprintId } } }),
         ...(assigneeId && { assignee: { connect: { id: assigneeId } } }),

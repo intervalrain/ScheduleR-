@@ -5,22 +5,24 @@ import React, { createContext, useContext, useState } from "react";
 import { NewTaskDialog } from "./NewTaskDialog";
 
 interface NewTaskDialogContextType {
-  openNewTaskDialog: () => void;
+  openNewTaskDialog: (sprintId?: string) => void;
 }
 
 const NewTaskDialogContext = createContext<NewTaskDialogContextType | undefined>(undefined);
 
 export const NewTaskDialogProvider = ({ children }: { children: React.ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedSprintId, setSelectedSprintId] = useState<string | undefined>();
 
-  const openNewTaskDialog = () => {
+  const openNewTaskDialog = (sprintId?: string) => {
+    setSelectedSprintId(sprintId);
     setIsOpen(true);
   };
 
   return (
     <NewTaskDialogContext.Provider value={{ openNewTaskDialog }}>
       {children}
-      <NewTaskDialog isOpen={isOpen} setIsOpen={setIsOpen} />
+      <NewTaskDialog isOpen={isOpen} setIsOpen={setIsOpen} selectedSprintId={selectedSprintId} />
     </NewTaskDialogContext.Provider>
   );
 };
