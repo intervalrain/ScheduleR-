@@ -1,171 +1,314 @@
+
 "use client";
 
+import { useSession, signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { 
+  UserIcon, 
+  MailIcon, 
+  UsersIcon, 
+  PlusIcon
+} from "lucide-react";
 
-interface UserSettings {
-  workHours: {
-    start: string;
-    end: string;
-  };
-  workDays: number[];
+interface Team {
+  id: string;
+  name: string;
+  role: string;
+  members: number;
 }
-
-const daysOfWeek = [
-  { id: 1, label: "Monday" },
-  { id: 2, label: "Tuesday" },
-  { id: 3, label: "Wednesday" },
-  { id: 4, label: "Thursday" },
-  { id: 5, label: "Friday" },
-  { id: 6, label: "Saturday" },
-  { id: 0, label: "Sunday" },
-];
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [categories, setCategories] = useState<any[]>([]);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryColor, setNewCategoryColor] = useState("#ffffff");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [avatar, setAvatar] = useState("");
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [joinTeamCode, setJoinTeamCode] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      fetchUserSettings();
-      fetchCategories();
+    if (session?.user) {
+      setName(session.user.name || "");
+      setEmail(session.user.email || "");
+      setAvatar(session.user.image || "");
+      
+      // Mock teams data - in real app, fetch from API
+      setTeams([
+        { id: "1", name: "Development Team", role: "Owner", members: 5 },
+        { id: "2", name: "Design Squad", role: "Member", members: 3 },
+      ]);
     }
-  }, [status]);
+  }, [session]);
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch("/api/user/categories");
-      if (response.ok) {
-        setCategories(await response.json());
-      }
-    } catch (error) {
-      console.error("Failed to fetch categories:", error);
-    }
-  };
+  if (status === "loading") {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="animate-pulse">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-[200px]"></div>
+                  <div className="h-4 bg-gray-200 rounded w-[150px]"></div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) {
-      console.error("Category name cannot be empty.");
-      return;
-    }
-    try {
-      const response = await fetch("/api/user/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCategoryName, color: newCategoryColor }),
-      });
-      if (response.ok) {
-        fetchCategories(); // Refresh categories
-        setNewCategoryName("");
-        setNewCategoryColor("#ffffff");
-      }
-    } catch (error) {
-      console.error("Failed to add category:", error);
-    }
-  };
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-[400px]">
+          <CardHeader className="text-center">
+            <UserIcon className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <CardTitle>Sign in Required</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground mb-4">
+              Please sign in to view and manage your profile.
+            </p>
+            <Button onClick={() => signIn("google")} className="w-full">
+              Sign In with Google
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  const handleDeleteCategory = async (id: string) => {
+  const handleUpdateProfile = async () => {
+    setLoading(true);
     try {
-      await fetch(`/api/user/categories/${id}`, { method: "DELETE" });
-      fetchCategories(); // Refresh categories
-    } catch (error) {
-      console.error("Failed to delete category:", error);
-    }
-  };
-
-  const fetchUserSettings = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/user/profile");
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data.settings);
-      }
-    } catch (error) {
-      console.error("Failed to fetch user settings:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    try {
+      // API call to update user profile
       const response = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({ name, avatar }),
       });
-      if (!response.ok) {
-        throw new Error("Failed to save settings");
+      
+      if (response.ok) {
+        // Show success message
+        alert("Profile updated successfully!");
+      } else {
+        throw new Error("Failed to update profile");
       }
-      // Add user feedback, e.g., a toast notification
     } catch (error) {
-      console.error("Error saving settings:", error);
+      console.error("Error updating profile:", error);
+      alert("Failed to update profile. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleWorkDayChange = (dayId: number) => {
-    if (!settings) return;
-    const newWorkDays = settings.workDays.includes(dayId)
-      ? settings.workDays.filter((d) => d !== dayId)
-      : [...settings.workDays, dayId];
-    setSettings({ ...settings, workDays: newWorkDays });
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return;
+    
+    try {
+      // API call to create team
+      const response = await fetch("/api/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTeamName }),
+      });
+      
+      if (response.ok) {
+        const newTeam = await response.json();
+        setTeams([...teams, newTeam]);
+        setNewTeamName("");
+        alert("Team created successfully!");
+      }
+    } catch (error) {
+      console.error("Error creating team:", error);
+      alert("Failed to create team. Please try again.");
+    }
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!settings) {
-    return <div>Failed to load settings.</div>;
-  }
+  const handleJoinTeam = async () => {
+    if (!joinTeamCode.trim()) return;
+    
+    try {
+      // API call to join team
+      const response = await fetch("/api/team/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: joinTeamCode }),
+      });
+      
+      if (response.ok) {
+        const team = await response.json();
+        setTeams([...teams, team]);
+        setJoinTeamCode("");
+        alert("Successfully joined team!");
+      }
+    } catch (error) {
+      console.error("Error joining team:", error);
+      alert("Failed to join team. Please check the invite code.");
+    }
+  };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Profile & Settings</h1>
-      <div className="space-y-8">
-        <Button onClick={handleSaveSettings}>Save Settings</Button>
-      </div>
-
-      <div className="mt-12">
-        <h2 className="text-lg font-semibold mb-4">Busy Hour Categories</h2>
-        <div className="space-y-4">
-          {categories.map((category) => (
-            <div key={category.id} className="flex items-center justify-between p-2 border rounded-md">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full" style={{ backgroundColor: category.color }} />
-                <span>{category.name}</span>
-              </div>
-              <Button variant="destructive" size="sm" onClick={() => handleDeleteCategory(category.id)}>
-                Delete
-              </Button>
+    <div className="space-y-6">
+      {/* Profile Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserIcon className="w-5 h-5" />
+            User Profile
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center space-x-4">
+            <Avatar className="w-16 h-16">
+              <AvatarImage src={avatar} alt={name} />
+              <AvatarFallback className="text-lg">
+                {name?.charAt(0) || email?.charAt(0) || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold">{name || "Unnamed User"}</h3>
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <MailIcon className="w-3 h-3" />
+                {email}
+              </p>
             </div>
-          ))}
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Input 
-            placeholder="Category Name" 
-            value={newCategoryName} 
-            onChange={(e) => setNewCategoryName(e.target.value)} 
-          />
-          <Input 
-            type="color" 
-            value={newCategoryColor} 
-            onChange={(e) => setNewCategoryColor(e.target.value)} 
-            className="w-16"
-          />
-          <Button onClick={handleAddCategory}>Add Category</Button>
-        </div>
-      </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="name" className="text-sm font-medium">
+                Display Name
+              </label>
+              <Input 
+                id="name" 
+                value={name} 
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                Email Address
+              </label>
+              <Input 
+                id="email" 
+                value={email} 
+                disabled 
+                className="bg-muted"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="avatar" className="text-sm font-medium">
+              Avatar URL
+            </label>
+            <Input 
+              id="avatar" 
+              value={avatar} 
+              onChange={(e) => setAvatar(e.target.value)}
+              placeholder="Enter avatar URL"
+            />
+          </div>
+
+          <Button 
+            onClick={handleUpdateProfile} 
+            disabled={loading}
+            className="w-full md:w-auto"
+          >
+            {loading ? "Updating..." : "Update Profile"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Team Management Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UsersIcon className="w-5 h-5" />
+            Team Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Current Teams */}
+          <div className="space-y-3">
+            <h4 className="font-medium">Your Teams</h4>
+            {teams.length > 0 ? (
+              <div className="space-y-2">
+                {teams.map((team) => (
+                  <div 
+                    key={team.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <UsersIcon className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{team.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {team.members} members
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={team.role === "Owner" ? "default" : "secondary"}>
+                      {team.role}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground">You&apos;re not part of any teams yet.</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Create/Join Team */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <h4 className="font-medium">Create New Team</h4>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Team name"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                />
+                <Button onClick={handleCreateTeam} size="sm">
+                  <PlusIcon className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-medium">Join Team</h4>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Invite code"
+                  value={joinTeamCode}
+                  onChange={(e) => setJoinTeamCode(e.target.value)}
+                />
+                <Button onClick={handleJoinTeam} size="sm" variant="outline">
+                  Join
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
