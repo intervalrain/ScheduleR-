@@ -21,7 +21,8 @@ import {
   BarChart3Icon, 
   LayoutDashboardIcon,
   UserIcon,
-  LogOutIcon 
+  LogOutIcon,
+  TrashIcon 
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -108,6 +109,31 @@ export default function Header() {
     }
   };
 
+  const deleteSprint = async (sprintId: string, sprintName: string) => {
+    if (!confirm(`Are you sure you want to delete "${sprintName}"?`)) return;
+    
+    try {
+      const response = await fetch(`/api/sprints/${sprintId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        // Refresh sprints list
+        await refreshSprints();
+        // If the deleted sprint was selected, clear selection
+        if (selectedSprintId === sprintId) {
+          setSelectedSprintId(null);
+        }
+      } else {
+        console.error('Failed to delete sprint');
+        alert('Failed to delete sprint');
+      }
+    } catch (error) {
+      console.error('Error deleting sprint:', error);
+      alert('Error deleting sprint');
+    }
+  };
+
   const isActive = (href: string) => {
     if (href === "/") {
       return pathname === "/";
@@ -143,9 +169,24 @@ export default function Header() {
                 </SelectItem>
               )}
               {sprints.map((sprint) => (
-                <SelectItem key={sprint.id} value={sprint.id}>
-                  {sprint.name}
-                </SelectItem>
+                <div key={sprint.id} className="flex items-center justify-between px-2 py-1.5 hover:bg-accent group">
+                  <SelectItem 
+                    value={sprint.id} 
+                    className="flex-1 border-0 p-0 focus:bg-transparent data-[highlighted]:bg-transparent"
+                  >
+                    {sprint.name}
+                  </SelectItem>
+                  <button
+                    className="h-6 w-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground rounded"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteSprint(sprint.id, sprint.name);
+                    }}
+                  >
+                    <TrashIcon className="h-3 w-3" />
+                  </button>
+                </div>
               ))}
             </SelectContent>
           </Select>

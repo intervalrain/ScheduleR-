@@ -52,6 +52,7 @@ export function DatePicker({ date, onDateChange, placeholder = "Pick a date" }: 
           selected={selectedDate}
           onSelect={handleDateSelect}
           initialFocus
+          className="w-48"
         />
       </PopoverContent>
     </Popover>

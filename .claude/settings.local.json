@@ -13,7 +13,8 @@
       "Bash(pkill:*)",
       "Bash(curl:*)",
       "Bash(find:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }
