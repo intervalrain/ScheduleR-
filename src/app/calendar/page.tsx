@@ -51,6 +51,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [busyHours, setBusyHours] = useState<BusyHour[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [currentSprint, setCurrentSprint] = useState<Sprint | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings>({
     workHours: { start: "08:30", end: "17:30" },
     workDays: [1, 2, 3, 4, 5],
@@ -96,7 +97,19 @@ export default function CalendarPage() {
     try {
       const response = await fetch("/api/sprints");
       if (response.ok) {
-        setSprints(await response.json());
+        const sprintsData = await response.json();
+        setSprints(sprintsData);
+        
+        // Set current sprint - find active sprint or use the first one
+        if (sprintsData.length > 0) {
+          const now = new Date();
+          const activeSprint = sprintsData.find((sprint: Sprint) => {
+            const start = new Date(sprint.startDate);
+            const end = new Date(sprint.endDate);
+            return now >= start && now <= end;
+          });
+          setCurrentSprint(activeSprint || sprintsData[0]);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch sprints:", error);
@@ -178,6 +191,7 @@ export default function CalendarPage() {
         setCurrentDate={setCurrentDate}
         view={view}
         setView={setView}
+        currentSprint={currentSprint}
         onOpenRegularHours={() => setIsRegularHoursModalOpen(true)}
         onOpenCategoryModal={() => setIsCategoryModalOpen(true)}
       />
@@ -227,11 +241,12 @@ interface HeaderProps {
   setCurrentDate: (date: Date) => void;
   view: "week" | "month";
   setView: (view: "week" | "month") => void;
+  currentSprint: Sprint | null;
   onOpenRegularHours: () => void;
   onOpenCategoryModal: () => void;
 }
 
-function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours, onOpenCategoryModal }: HeaderProps) {
+function Header({ currentDate, setCurrentDate, view, setView, currentSprint, onOpenRegularHours, onOpenCategoryModal }: HeaderProps) {
   const handleViewChange = (newView: "week" | "month") => {
     setView(newView);
   };
@@ -246,15 +261,44 @@ function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours
     }
   };
 
+  const handleSprintDateJump = (dateType: 'start' | 'end') => {
+    if (currentSprint) {
+      const targetDate = dateType === 'start' 
+        ? new Date(currentSprint.startDate) 
+        : new Date(currentSprint.endDate);
+      setCurrentDate(targetDate);
+    }
+  };
+
   return (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={() => handleDateNav('prev')}>{'<'}</Button>
         <Button size="sm" onClick={() => handleDateNav('next')}>{'>'}</Button>
         <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())}>Today</Button>
+        {currentSprint && (
+          <>
+            <Button 
+              size="sm" 
+              variant="secondary" 
+              onClick={() => handleSprintDateJump('start')}
+              title={`Jump to sprint start: ${format(new Date(currentSprint.startDate), 'MMM dd, yyyy')}`}
+            >
+              Sprint Start
+            </Button>
+            <Button 
+              size="sm" 
+              variant="secondary" 
+              onClick={() => handleSprintDateJump('end')}
+              title={`Jump to sprint end: ${format(new Date(currentSprint.endDate), 'MMM dd, yyyy')}`}
+            >
+              Sprint End
+            </Button>
+          </>
+        )}
       </div>
       <h2 className="text-lg font-semibold">
-        {format(currentDate, view === 'week' ? 'MMMM yyyy' : 'MMMM yyyy')}
+        {format(currentDate, 'MMMM yyyy')}
       </h2>
       <div className="flex items-center gap-2 p-1 space-x-2">
         <div className="bg-muted rounded-lg">
@@ -375,9 +419,9 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
         {/* Day columns */}
         {weekDays.map((day) => (
           <div key={day.toString()} className="col-span-1 relative">
-            <div className="h-10 flex flex-col items-center justify-center border-b border-r">
+            <div className="h-14 flex flex-col items-center justify-center border-b border-r">
               <span className="font-semibold">{format(day, "EEE")}</span>
-              <span className={cn("text-sm", isSameDay(day, new Date()) ? "text-primary" : "text-muted-foreground")}>
+              <span className={cn("text-sm", isSameDay(day, new Date()) ? "text-primary font-extrabold text-2xl " : "text-muted-foreground")}>
                 {format(day, "d")}
               </span>
             </div>
@@ -546,7 +590,7 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
               isWeekend(day) && "bg-muted/50"
             )}
           >
-            <span className={cn("font-medium", isSameDay(day, new Date()) && "text-primary")}>
+            <span className={cn("font-medium", isSameDay(day, new Date()) && "font-extrabold text-2xl text-primary")}>
               {format(day, "d")}
             </span>
             <div className="mt-1 text-sm">
