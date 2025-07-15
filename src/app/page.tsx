@@ -19,7 +19,6 @@ interface Task {
 }
 
 export default function Home() {
-  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprint, setSelectedSprint] = useState<Sprint | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const { data: session } = useSession();
@@ -41,7 +40,6 @@ export default function Home() {
       const response = await fetch("/api/sprints");
       if (response.ok) {
         const data = await response.json();
-        setSprints(data);
         if (data.length > 0) {
           setSelectedSprint(data[0]); // Select the first sprint by default
         }

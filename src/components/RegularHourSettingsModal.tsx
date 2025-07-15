@@ -17,8 +17,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface RegularHourSettingsModalProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  userSettings: any;
-  onSave: (settings: any) => void;
+  userSettings: {
+    workHours: { start: string; end: string };
+    workDays: number[];
+    show24Hours: boolean;
+  };
+  onSave: (settings: {
+    workHours?: { start: string; end: string };
+    workDays?: number[];
+    show24Hours?: boolean;
+  }) => void;
 }
 
 const daysOfWeek = [

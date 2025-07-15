@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
 // GET /api/user/categories
@@ -21,7 +21,7 @@ export async function GET() {
       where: { userId: user.id },
     });
     return NextResponse.json(categories);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 });
   }
 }
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       },
     });
     return NextResponse.json(newCategory, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to create category' }, { status: 500 });
   }
 }

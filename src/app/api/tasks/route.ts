@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 import { NextRequest } from 'next/server';
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build where clause dynamically
-    const whereClause: any = {
+    const whereClause: Record<string, unknown> = {
       OR: [
         { createdById: user.id },
         { assigneeId: user.id },
@@ -96,7 +96,8 @@ export async function POST(request: Request) {
     const requestBody = await request.json();
     console.log('Raw request body:', requestBody);
     
-    const { name, title, description, status, sprintId, assigneeId, estimate, estimatedHours, priority, tags, labels } = requestBody;
+    const { name, title, description, status, estimate, estimatedHours, priority, tags, labels } = requestBody;
+    let { sprintId, assigneeId } = requestBody;
     
     console.log('Parsed task data:', { name, title, description, status, sprintId, assigneeId, estimate, estimatedHours, priority, tags, labels });
 
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
     });
 
     // Prepare the data object step by step for better debugging
-    const taskData: any = {
+    const taskData = {
       title: taskTitle,
       description: description || null,
       status: status || 'TODO',
@@ -169,19 +170,9 @@ export async function POST(request: Request) {
       tags: tags || [],
       labels: labels || [],
       createdById: user.id,
+      sprintId: sprintId || null,
+      assigneeId: assigneeId || null,
     };
-
-    // Add sprint connection if provided
-    if (sprintId) {
-      console.log('Adding sprint connection:', sprintId);
-      taskData.sprint = { connect: { id: sprintId } };
-    }
-
-    // Add assignee connection if provided
-    if (assigneeId) {
-      console.log('Adding assignee connection:', assigneeId);
-      taskData.assignee = { connect: { id: assigneeId } };
-    }
 
     console.log('Final task data for creation:', taskData);
 

@@ -14,7 +14,11 @@
       "Bash(curl:*)",
       "Bash(find:*)",
       "Bash(node:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(npm run lint)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

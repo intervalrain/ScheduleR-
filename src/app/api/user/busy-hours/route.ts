@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
 // GET /api/user/busy-hours
@@ -20,7 +20,7 @@ export async function GET() {
       where: { userId: user.id },
     });
     return NextResponse.json(busyHours);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch busy hours' }, { status: 500 });
   }
 }

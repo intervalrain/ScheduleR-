@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 interface CategoryManagementModalProps {
   isOpen: boolean;
@@ -24,7 +23,7 @@ export function CategoryManagementModal({
   setIsOpen,
   onCategoriesUpdated,
 }: CategoryManagementModalProps) {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{id: string; name: string; color: string}[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#ffffff");
 

@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 // Interfaces
 interface BusyHour {
-  categoryId: any;
+  categoryId: string;
   id: string;
   userId: string;
   startTime: Date;
@@ -58,7 +58,7 @@ export default function CalendarPage() {
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<{ startTime: Date; endTime: Date } | null>(null);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{id: string; name: string; color: string}[]>([]);
 
   const [isRegularHoursModalOpen, setIsRegularHoursModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -71,7 +71,7 @@ export default function CalendarPage() {
       const response = await fetch("/api/user/busy-hours");
       if (response.ok) {
         const data = await response.json();
-        setBusyHours(data.map((bh: any) => ({ ...bh, startTime: new Date(bh.startTime), endTime: new Date(bh.endTime) })));
+        setBusyHours(data.map((bh: BusyHour & {startTime: string; endTime: string}) => ({ ...bh, startTime: new Date(bh.startTime), endTime: new Date(bh.endTime) })));
       }
     } catch (error) {
       console.error("Failed to fetch busy hours:", error);
@@ -153,7 +153,7 @@ export default function CalendarPage() {
     fetchBusyHours();
   };
 
-  const handleSaveRegularHours = async (newSettings: any) => {
+  const handleSaveRegularHours = async (newSettings: Partial<UserSettings>) => {
     try {
       const response = await fetch("/api/user/profile", {
         method: "PUT",
@@ -222,7 +222,16 @@ export default function CalendarPage() {
 }
 
 // Header Component
-function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours, onOpenCategoryModal }: any) {
+interface HeaderProps {
+  currentDate: Date;
+  setCurrentDate: (date: Date) => void;
+  view: "week" | "month";
+  setView: (view: "week" | "month") => void;
+  onOpenRegularHours: () => void;
+  onOpenCategoryModal: () => void;
+}
+
+function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours, onOpenCategoryModal }: HeaderProps) {
   const handleViewChange = (newView: "week" | "month") => {
     setView(newView);
   };
@@ -262,8 +271,17 @@ function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours
 }
 
 // Week View Component
-function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBusyHourDeleted, categories }: any) {
-  const { workHours, workDays, show24Hours } = userSettings;
+interface WeekViewProps {
+  currentDate: Date;
+  userSettings: UserSettings;
+  busyHours: BusyHour[];
+  onRangeSelected: (range: { startTime: Date; endTime: Date }) => void;
+  onBusyHourDeleted: () => void;
+  categories: {id: string; name: string; color: string}[];
+}
+
+function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBusyHourDeleted, categories }: WeekViewProps) {
+  const { workHours, show24Hours } = userSettings;
   const [selection, setSelection] = useState<{ day: Date; startTime: string; endTime: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -364,7 +382,7 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
               </span>
             </div>
             <div className="relative" onMouseLeave={handleMouseUp}>
-              {timeSlots.map((slot, index) => {
+              {timeSlots.map((slot) => {
                 const isWorkDay = userSettings.workDays.includes(day.getDay());
                 
                 // Check if current time slot is within work hours when in 24-hour view
@@ -395,9 +413,9 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
               })}
               {/* Render busy hours */}
               {getBusyBlocksForDay(day).map((block: BusyHour) => {
-                const top = timeSlots.findIndex((s: any) => s.value === format(block.startTime, "HH:mm")) * 3; // 3rem per slot (h-12)
+                const top = timeSlots.findIndex((s) => s.value === format(block.startTime, "HH:mm")) * 3; // 3rem per slot (h-12)
                 const height = (block.endTime.getTime() - block.startTime.getTime()) / (1000 * 60 * 30) * 3; // 3rem per 30 mins
-                const categoryColor = categories.find((cat: any) => cat.id === block.categoryId)?.color || "#ef4444"; // Default to red-500
+                const categoryColor = categories.find((cat) => cat.id === block.categoryId)?.color || "#ef4444"; // Default to red-500
                 return (
                   <div
                     key={block.id}
@@ -433,7 +451,14 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
 
 
 // Month View Component
-function MonthView({ currentDate, userSettings, busyHours, sprints }: any) {
+interface MonthViewProps {
+  currentDate: Date;
+  userSettings: UserSettings;
+  busyHours: BusyHour[];
+  sprints: Sprint[];
+}
+
+function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -446,7 +471,7 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: any) {
     const { start, end } = userSettings.workHours;
     const startMinutes = parseInt(start.split(':')[0]) * 60 + parseInt(start.split(':')[1]);
     const endMinutes = parseInt(end.split(':')[0]) * 60 + parseInt(end.split(':')[1]);
-    let totalWorkMinutes = endMinutes - startMinutes;
+    const totalWorkMinutes = endMinutes - startMinutes;
 
     const dayBusyHours = busyHours.filter((bh: BusyHour) => isSameDay(bh.startTime, day));
     let busyMinutes = 0;
@@ -474,7 +499,7 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: any) {
   };
 
   const getSprintStatusForDay = (day: Date) => {
-    const dayStatus = [];
+    const dayStatus: Array<{type: 'start' | 'end'; sprint: Sprint}> = [];
     sprints.forEach((sprint: Sprint) => {
       const sprintStart = new Date(sprint.startDate);
       const sprintEnd = new Date(sprint.endDate);

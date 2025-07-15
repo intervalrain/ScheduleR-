@@ -17,12 +17,21 @@ export async function POST(request: Request) {
   }
 
   try {
+    // First find the user by email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
     const newTeam = await prisma.team.create({
       data: {
         name,
         users: {
           create: {
-            userId: session.user.id as string,
+            userId: user.id,
           },
         },
       },

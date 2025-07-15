@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
 // DELETE /api/sprints/[id]
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   
   if (!session || !session.user || !session.user.email) {
@@ -30,8 +30,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     const teamIds = user.teams.map((teamUser) => teamUser.team.id);
 
     // Check if the sprint exists and user has permission to delete it
+    const { id } = await params;
     const sprint = await prisma.sprint.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { team: true },
     });
 
@@ -46,7 +47,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 
     // Delete the sprint
     await prisma.sprint.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return new Response(null, { status: 204 });

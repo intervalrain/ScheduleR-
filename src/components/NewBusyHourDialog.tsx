@@ -24,7 +24,7 @@ interface NewBusyHourDialogProps {
   setIsOpen: (isOpen: boolean) => void;
   selectedRange: { startTime: Date; endTime: Date } | null;
   onBusyHourCreated: () => void;
-  categories: any[];
+  categories: {id: string; name: string; color: string}[];
   onOpenCategoryModal: () => void;
 }
 

@@ -43,10 +43,7 @@ export async function DELETE(request: Request) {
   try {
     await prisma.dependency.delete({
       where: {
-        taskId_dependsOnTaskId: {
-          taskId,
-          dependsOnTaskId,
-        },
+        taskId: taskId,
       },
     });
     return NextResponse.json({ message: 'Dependency deleted successfully' });

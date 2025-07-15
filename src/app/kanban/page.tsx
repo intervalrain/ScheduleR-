@@ -272,7 +272,7 @@ export default function KanbanPage() {
                               className={`transition-shadow hover:shadow-md cursor-pointer ${
                                 snapshot.isDragging ? 'shadow-lg rotate-2' : ''
                               }`}
-                              onClick={(e) => {
+                              onClick={() => {
                                 // Only navigate if not dragging
                                 if (!snapshot.isDragging) {
                                   handleTaskClick(task.id);

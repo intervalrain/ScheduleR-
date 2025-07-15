@@ -122,6 +122,7 @@ export default function DashboardPage() {
     }
   }, [layouts]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onLayoutChange = (layout: any, allLayouts: any) => {
     setLayouts(allLayouts);
   };

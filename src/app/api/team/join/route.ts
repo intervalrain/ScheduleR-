@@ -17,6 +17,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    // First find the user by email
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
     // Check if team exists
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -30,7 +39,7 @@ export async function POST(request: Request) {
     const existingMembership = await prisma.teamsOnUsers.findUnique({
       where: {
         userId_teamId: {
-          userId: session.user.id as string,
+          userId: user.id,
           teamId: teamId,
         },
       },
@@ -42,7 +51,7 @@ export async function POST(request: Request) {
 
     const newMembership = await prisma.teamsOnUsers.create({
       data: {
-        userId: session.user.id as string,
+        userId: user.id,
         teamId: teamId,
       },
     });

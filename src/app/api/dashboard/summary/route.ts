@@ -17,7 +17,7 @@ export async function GET() {
       prisma.task.count({ where: { status: 'Pending' } }),
       prisma.task.findMany({
         select: {
-          estimateHours: true,
+          estimatedHours: true,
           status: true,
           createdAt: true,
         },
@@ -26,7 +26,7 @@ export async function GET() {
 
     // Calculate total hours
     const totalHours = allTasks.reduce((sum, task) => {
-      return sum + (task.estimateHours || 0);
+      return sum + (task.estimatedHours || 0);
     }, 0);
 
     // Calculate completion rate

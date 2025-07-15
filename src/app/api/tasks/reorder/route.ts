@@ -10,11 +10,11 @@ export async function PUT(request: Request) {
   }
 
   try {
-    // Update the order field for each task
+    // Update the priority field for ordering (using priority as order)
     const updatePromises = taskIds.map((taskId: string, index: number) =>
       prisma.task.update({
         where: { id: taskId },
-        data: { order: index },
+        data: { priority: index.toString() },
       })
     );
 

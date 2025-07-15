@@ -46,8 +46,9 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
   useEffect(() => {
     if (isOpen && session) {
       fetchTeamMembers();
-      if (session.user?.id) {
-        setAssigneeId(session.user.id);
+      if (session.user?.email) {
+        // We'll find the actual user ID when saving the task
+        setAssigneeId("current-user");
       } else {
         setAssigneeId("unassigned");
       }
@@ -101,7 +102,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
         setTaskName("");
         setDescription("");
         setEstimate("");
-        setAssigneeId(session?.user?.id || "unassigned");
+        setAssigneeId(session?.user?.email ? "current-user" : "unassigned");
         setPriority("1000000");
         setStatus("TODO");
         setTags("");
@@ -114,7 +115,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
         let errorData;
         try {
           errorData = JSON.parse(errorText);
-        } catch (e) {
+        } catch {
           errorData = { error: errorText };
         }
         console.error('API Error:', response.status, errorData);

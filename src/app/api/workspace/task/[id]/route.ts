@@ -1,11 +1,12 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  console.log('GET /api/workspace/task/[id] called with id:', params.id);
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  console.log('GET /api/workspace/task/[id] called with id:', id);
   
   const session = await getServerSession(authOptions);
   console.log('Session:', session?.user?.email);
@@ -15,7 +16,6 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
   console.log('Task ID type:', typeof id, 'Value:', id, 'Length:', id?.length);
 
   try {
@@ -158,14 +158,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user || !session.user.email) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const { title, description, status, priority, estimatedHours, tags } = await request.json();
 
   try {

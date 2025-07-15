@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
 // GET /api/user/profile
@@ -21,7 +21,7 @@ export async function GET() {
     }
 
     return NextResponse.json(user);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch user profile' }, { status: 500 });
   }
 }
@@ -42,7 +42,7 @@ export async function PUT(request: Request) {
     });
 
     return NextResponse.json(updatedUser);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to update user profile' }, { status: 500 });
   }
 }

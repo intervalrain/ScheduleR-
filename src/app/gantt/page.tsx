@@ -106,6 +106,7 @@ export default function GanttPage() {
           header_height: 50,
           column_width: 30,
           step: 24,
+          // @ts-expect-error - frappe-gantt types are not compatible with string array
           view_modes: ["Quarter Day", "Half Day", "Day", "Week", "Month"],
           bar_height: 20,
           bar_corner_radius: 3,
