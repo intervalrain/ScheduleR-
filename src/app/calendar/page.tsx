@@ -27,6 +27,7 @@ interface BusyHour {
   startTime: Date;
   endTime: Date;
   title: string;
+  recurringGroupId?: string;
 }
 
 interface UserSettings {
@@ -36,6 +37,7 @@ interface UserSettings {
   };
   workDays: number[]; // 0 = Sunday, 1 = Monday, ...
   show24Hours: boolean;
+  weekStartsOn: 0 | 1; // 0 = Sunday, 1 = Monday
 }
 
 interface Sprint {
@@ -56,6 +58,7 @@ export default function CalendarPage() {
     workHours: { start: "08:30", end: "17:30" },
     workDays: [1, 2, 3, 4, 5],
     show24Hours: false,
+    weekStartsOn: 1, // Default to Monday
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<{ startTime: Date; endTime: Date } | null>(null);
@@ -85,7 +88,11 @@ export default function CalendarPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.settings) {
-          setUserSettings(data.settings);
+          setUserSettings(prevSettings => ({
+            ...prevSettings,
+            ...data.settings,
+            weekStartsOn: data.settings.weekStartsOn ?? 1 // Default to Monday if not set
+          }));
         }
       }
     } catch (error) {
@@ -168,13 +175,15 @@ export default function CalendarPage() {
 
   const handleSaveRegularHours = async (newSettings: Partial<UserSettings>) => {
     try {
+      const updatedSettings = { ...userSettings, ...newSettings };
       const response = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: { ...userSettings, ...newSettings } }),
+        body: JSON.stringify({ settings: updatedSettings }),
       });
       if (response.ok) {
-        fetchUserSettings(); // Refresh settings
+        setUserSettings(updatedSettings); // Update state immediately
+        fetchUserSettings(); // Refresh settings from server
       } else {
         console.error("Failed to save regular hours settings");
       }
@@ -219,6 +228,7 @@ export default function CalendarPage() {
           currentDate={currentDate} 
           userSettings={userSettings} 
           busyHours={busyHours}
+          currentSprint={currentSprint}
           onRangeSelected={handleRangeSelected}
           onBusyHourDeleted={fetchBusyHours}
           categories={categories}
@@ -319,20 +329,221 @@ interface WeekViewProps {
   currentDate: Date;
   userSettings: UserSettings;
   busyHours: BusyHour[];
+  currentSprint: Sprint | null;
   onRangeSelected: (range: { startTime: Date; endTime: Date }) => void;
   onBusyHourDeleted: () => void;
   categories: {id: string; name: string; color: string}[];
 }
 
-function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBusyHourDeleted, categories }: WeekViewProps) {
-  const { workHours, show24Hours } = userSettings;
+function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRangeSelected, onBusyHourDeleted, categories }: WeekViewProps) {
+  const { workHours, show24Hours, weekStartsOn } = userSettings;
   const [selection, setSelection] = useState<{ day: Date; startTime: string; endTime: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<BusyHour | null>(null);
+  const [draggedBlock, setDraggedBlock] = useState<BusyHour | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingBlock, setIsDraggingBlock] = useState(false);
 
   const weekDays = eachDayOfInterval({
-    start: startOfWeek(currentDate, { weekStartsOn: 1 }),
-    end: endOfWeek(currentDate, { weekStartsOn: 1 }),
+    start: startOfWeek(currentDate, { weekStartsOn }),
+    end: endOfWeek(currentDate, { weekStartsOn }),
   });
+
+  // Helper functions for visual markers
+  const isToday = (day: Date) => isSameDay(day, new Date());
+  
+  const isSprintStart = (day: Date) => {
+    if (!currentSprint) return false;
+    return isSameDay(day, new Date(currentSprint.startDate));
+  };
+  
+  const isSprintEnd = (day: Date) => {
+    if (!currentSprint) return false;
+    return isSameDay(day, new Date(currentSprint.endDate));
+  };
+  
+  const isWithinSprint = (day: Date) => {
+    if (!currentSprint) return false;
+    const sprintStart = new Date(currentSprint.startDate);
+    const sprintEnd = new Date(currentSprint.endDate);
+    return day >= sprintStart && day <= sprintEnd;
+  };
+
+  // Update current time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Global mouse event handlers for dragging
+  useEffect(() => {
+    let currentDropPosition: { dayIndex: number; timeSlotIndex: number } | null = null;
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDraggingBlock || !draggedBlock) return;
+      
+      // Find the calendar grid container
+      const calendarContainer = document.querySelector('.grid.grid-cols-8');
+      if (!calendarContainer) return;
+      
+      const rect = calendarContainer.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      // Calculate which day column and time slot
+      const columnWidth = rect.width / 8;
+      const dayIndex = Math.floor(x / columnWidth) - 1; // -1 because first column is time
+      
+      if (dayIndex >= 0 && dayIndex < weekDays.length) {
+        const headerHeight = 56; // h-14 = 3.5rem = 56px
+        const slotHeight = 48; // h-12 = 3rem = 48px
+        const timeSlotIndex = Math.floor((y - headerHeight) / slotHeight);
+        
+        if (timeSlotIndex >= 0 && timeSlotIndex < timeSlots.length) {
+          currentDropPosition = { dayIndex, timeSlotIndex };
+          
+          // Update the dragged block position visually
+          const draggedElement = document.querySelector(`[data-block-id="${draggedBlock.id}"]`);
+          if (draggedElement) {
+            (draggedElement as HTMLElement).style.transform = `translate(${x - (dragOffset?.x || 0)}px, ${y - (dragOffset?.y || 0)}px)`;
+          }
+        }
+      }
+    };
+
+    const handleGlobalMouseUp = async (e: MouseEvent) => {
+      if (isDraggingBlock && draggedBlock && currentDropPosition) {
+        // Calculate new date and time
+        const newDay = weekDays[currentDropPosition.dayIndex];
+        const newTimeSlot = timeSlots[currentDropPosition.timeSlotIndex];
+        
+        // Calculate duration of the original block
+        const originalDuration = draggedBlock.endTime.getTime() - draggedBlock.startTime.getTime();
+        
+        // Create new start and end times
+        const newStartTime = parse(newTimeSlot.value, "HH:mm", newDay);
+        const newEndTime = new Date(newStartTime.getTime() + originalDuration);
+        
+        // Update via API
+        try {
+          const response = await fetch(`/api/user/busy-hours/${draggedBlock.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              startTime: newStartTime.toISOString(),
+              endTime: newEndTime.toISOString()
+            })
+          });
+          
+          if (response.ok) {
+            onBusyHourDeleted(); // Refresh data
+          } else {
+            const errorData = await response.json();
+            alert(errorData.error || 'Failed to update time block position');
+          }
+        } catch (error) {
+          console.error('Error updating block position:', error);
+          alert('Failed to update time block position');
+        }
+      }
+      
+      handleBlockMouseUp();
+    };
+
+    if (isDraggingBlock) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDraggingBlock, draggedBlock, dragOffset, weekDays, onBusyHourDeleted]);
+
+  const handleDeleteBusyHour = async (block: BusyHour, deleteType: 'single' | 'future' | 'all') => {
+    let deleteUrl = `/api/user/busy-hours/${block.id}`;
+    
+    if (deleteType === 'future') {
+      deleteUrl += '?deleteFuture=true';
+    } else if (deleteType === 'all') {
+      deleteUrl += '?deleteRecurring=true';
+    }
+    
+    try {
+      await fetch(deleteUrl, { method: "DELETE" });
+      onBusyHourDeleted();
+    } catch (error) {
+      console.error('Error deleting busy hour:', error);
+    }
+  };
+
+  const handleBlockMouseDown = (block: BusyHour, event: React.MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    setDragOffset({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    });
+    setDraggedBlock(block);
+    setIsDraggingBlock(true);
+  };
+
+  const handleBlockMouseMove = (event: React.MouseEvent) => {
+    if (!isDraggingBlock || !draggedBlock || !dragOffset) return;
+    
+    event.preventDefault();
+    // We'll update the block position during mouse move
+    // The actual position calculation will be done here
+  };
+
+  const handleBlockMouseUp = async () => {
+    if (isDraggingBlock && draggedBlock) {
+      // Reset the transform on the dragged element
+      const draggedElement = document.querySelector(`[data-block-id="${draggedBlock.id}"]`);
+      if (draggedElement) {
+        (draggedElement as HTMLElement).style.transform = '';
+      }
+
+      // Here we would calculate the new date/time and update via API
+      // For now, we'll just reset the dragging state
+      // In a full implementation, you'd:
+      // 1. Calculate which day and time slot the block was dropped on
+      // 2. Validate if it's a valid location
+      // 3. Update the block via API
+      // 4. Refresh the data
+      
+      try {
+        // Example API call to update block position
+        // const response = await fetch(`/api/user/busy-hours/${draggedBlock.id}`, {
+        //   method: 'PUT',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify({
+        //     startTime: newStartTime,
+        //     endTime: newEndTime
+        //   })
+        // });
+        // if (response.ok) {
+        //   onBusyHourDeleted(); // Refresh data
+        // }
+        
+        console.log('Block dragging completed for:', draggedBlock.title);
+      } catch (error) {
+        console.error('Error updating block position:', error);
+      }
+    }
+    
+    setIsDraggingBlock(false);
+    setDraggedBlock(null);
+    setDragOffset(null);
+  };
 
   const timeSlots = useMemo(() => {
     const slots = [];
@@ -365,12 +576,14 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
   }, [workHours, show24Hours]);
 
   const handleMouseDown = (day: Date, time: string) => {
+    // Allow dragging to start anywhere
     setIsDragging(true);
     setSelection({ day, startTime: time, endTime: time });
   };
 
   const handleMouseMove = (time: string) => {
     if (isDragging && selection) {
+      // Allow dragging to any time slot
       setSelection({ ...selection, endTime: time });
     }
   };
@@ -385,15 +598,41 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
 
       if (parsedStart <= parsedEnd) {
         finalStartTime = parsedStart;
-        finalEndTime = new Date(parsedEnd.getTime()); // Create a new Date object to avoid modifying parsedEnd
-        finalEndTime.setMinutes(finalEndTime.getMinutes() + 30); // Make selection inclusive
+        finalEndTime = new Date(parsedEnd.getTime()); 
+        finalEndTime.setMinutes(finalEndTime.getMinutes() + 30); 
       } else {
         // Dragged backwards
         finalStartTime = parsedEnd;
-        finalEndTime = new Date(parsedStart.getTime()); // Create a new Date object
-        finalEndTime.setMinutes(finalEndTime.getMinutes() + 30); // Make selection inclusive
+        finalEndTime = new Date(parsedStart.getTime()); 
+        finalEndTime.setMinutes(finalEndTime.getMinutes() + 30); 
       }
-      onRangeSelected({ startTime: finalStartTime, endTime: finalEndTime });
+      
+      // Validate the selection before triggering the dialog
+      const isWorkDay = userSettings.workDays.includes(selection.day.getDay());
+      const isDayWithinSprint = isWithinSprint(selection.day);
+      
+      // Check if time slots are within work hours
+      const isWithinWorkHours = show24Hours ? (() => {
+        const workStart = parse(workHours.start, "HH:mm", new Date());
+        const workEnd = parse(workHours.end, "HH:mm", new Date());
+        const startHour = finalStartTime.getHours() * 60 + finalStartTime.getMinutes();
+        const endHour = finalEndTime.getHours() * 60 + finalEndTime.getMinutes();
+        const workStartMinutes = workStart.getHours() * 60 + workStart.getMinutes();
+        const workEndMinutes = workEnd.getHours() * 60 + workEnd.getMinutes();
+        return startHour >= workStartMinutes && endHour <= workEndMinutes;
+      })() : true;
+      
+      // Only proceed if selection is valid
+      if (isWorkDay && isDayWithinSprint && isWithinWorkHours) {
+        onRangeSelected({ startTime: finalStartTime, endTime: finalEndTime });
+      } else {
+        // Show a message explaining why the selection is invalid
+        let message = "Cannot create time block: ";
+        if (!isWorkDay) message += "Selected day is not a work day.";
+        else if (!isDayWithinSprint) message += "Selected day is outside sprint period.";
+        else if (!isWithinWorkHours) message += "Selected time is outside work hours.";
+        alert(message);
+      }
     }
     setIsDragging(false);
     setSelection(null);
@@ -403,31 +642,125 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
     return busyHours.filter((bh: BusyHour) => isSameDay(bh.startTime, day));
   };
 
+  // Calculate current time position - only for today
+  const getCurrentTimePosition = () => {
+    const now = new Date();
+    
+    // Check if current week contains today
+    const todayInThisWeek = weekDays.some(day => isToday(day));
+    if (!todayInThisWeek) return null;
+    
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+    
+    if (show24Hours) {
+      // In 24-hour view, calculate position based on all 24 hours
+      const totalMinutesIn24Hours = 24 * 60;
+      const positionPercentage = (currentTimeInMinutes / totalMinutesIn24Hours) * 100;
+      return (positionPercentage / 100) * (timeSlots.length * 3); // 3rem per slot
+    } else {
+      // In work hours view, calculate position relative to work hours
+      const workStart = parse(workHours.start, "HH:mm", new Date());
+      const workEnd = parse(workHours.end, "HH:mm", new Date());
+      const workStartMinutes = workStart.getHours() * 60 + workStart.getMinutes();
+      const workEndMinutes = workEnd.getHours() * 60 + workEnd.getMinutes();
+      
+      if (currentTimeInMinutes < workStartMinutes || currentTimeInMinutes > workEndMinutes) {
+        return null; // Current time is outside work hours
+      }
+      
+      const relativeMinutes = currentTimeInMinutes - workStartMinutes;
+      const totalWorkMinutes = workEndMinutes - workStartMinutes;
+      const positionPercentage = (relativeMinutes / totalWorkMinutes) * 100;
+      return (positionPercentage / 100) * (timeSlots.length * 3); // 3rem per slot
+    }
+  };
+
+  const currentTimePosition = getCurrentTimePosition();
+  const todayColumnIndex = weekDays.findIndex(day => isToday(day));
+
   return (
-    <div className="flex-grow overflow-auto border-t border-l select-none" onMouseUp={handleMouseUp}>
-      <div className="grid grid-cols-8 min-w-full">
+    <div 
+      className={cn(
+        "flex-grow overflow-auto bg-white select-none transition-all duration-200 ease-in-out relative",
+        isDraggingBlock && "cursor-move"
+      )} 
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleBlockMouseMove}
+      onMouseLeave={handleBlockMouseUp}
+    >
+      {/* Current time indicator - only for today column */}
+      {currentTimePosition !== null && todayColumnIndex >= 0 && (
+        <div 
+          className="absolute z-20 pointer-events-none"
+          style={{ 
+            top: `${3.5 + currentTimePosition}rem`, // 3.5rem for header height (h-14) + time position
+            left: `${(todayColumnIndex + 1) * 12.5}%`, // Position in today's column (12.5% per column)
+            width: '12.5%' // Width of one column
+          }}
+        >
+          <div className="flex items-center">
+            <div className="w-2 h-2 bg-red-500 rounded-full border border-white shadow-sm"></div>
+            <div className="flex-1 h-0.5 bg-red-500 shadow-sm"></div>
+            <div className="w-2 h-2 bg-red-500 rounded-full border border-white shadow-sm"></div>
+          </div>
+        </div>
+      )}
+      <div className={cn(
+        "grid grid-cols-8 min-w-full relative border border-gray-200 rounded-lg overflow-hidden",
+        isDraggingBlock && "[&_*]:!border-transparent"
+      )}>
         {/* Time column */}
-        <div className="col-span-1 sticky left-0 bg-white z-10">
-          <div className="h-10 border-b border-r"></div> {/* Empty cell for alignment */}
+        <div className="col-span-1 sticky left-0 bg-gray-50 z-10">
+          <div className="h-14 border-b border-r border-gray-200 bg-gray-50"></div> {/* Empty cell for alignment */}
           {timeSlots.map((slot) => (
-            <div key={slot.value} className="h-12 flex items-center justify-center border-b border-r">
-              <span className="text-xs text-muted-foreground">{slot.display}</span>
+            <div key={slot.value} className="h-12 flex items-center justify-center border-b border-r border-gray-200 bg-gray-50">
+              <span className="text-xs text-gray-600 font-medium">{slot.value}</span>
             </div>
           ))}
         </div>
 
         {/* Day columns */}
-        {weekDays.map((day) => (
-          <div key={day.toString()} className="col-span-1 relative">
-            <div className="h-14 flex flex-col items-center justify-center border-b border-r">
-              <span className="font-semibold">{format(day, "EEE")}</span>
-              <span className={cn("text-sm", isSameDay(day, new Date()) ? "text-primary font-extrabold text-2xl " : "text-muted-foreground")}>
-                {format(day, "d")}
-              </span>
+        {weekDays.map((day) => {
+          const isWorkDay = userSettings.workDays.includes(day.getDay());
+          const isDayWithinSprint = isWithinSprint(day);
+          const isDayAvailable = isWorkDay && isDayWithinSprint;
+          
+          return (
+            <div key={day.toString()} className="col-span-1 relative">
+              <div className={cn(
+                "h-14 flex flex-col items-center justify-center border-b border-r border-gray-200 relative",
+                isToday(day) && isDayAvailable ? "bg-blue-50 border-blue-200" : "bg-white",
+                !isDayAvailable && "bg-gray-50"
+              )}>
+                <span className={cn(
+                  "text-xs font-medium uppercase tracking-wide mb-1",
+                  isToday(day) && isDayAvailable ? "text-blue-600" : "text-gray-500"
+                )}>{format(day, "EEE")}</span>
+                <span className={cn(
+                  "text-lg font-semibold",
+                  isToday(day) && isDayAvailable ? "text-blue-600 bg-blue-100 w-8 h-8 rounded-full flex items-center justify-center" : 
+                  isDayAvailable ? "text-gray-700" : "text-gray-400"
+                )}>
+                  {format(day, "d")}
+                </span>
+              {/* Visual markers */}
+              <div className="absolute top-1 right-1 flex gap-1">
+                {isToday(day) && (
+                  <div className="w-2 h-2 bg-blue-500 rounded-full" title="Today"></div>
+                )}
+                {isSprintStart(day) && (
+                  <div className="w-2 h-2 bg-green-500 rounded-full" title="Sprint Start"></div>
+                )}
+                {isSprintEnd(day) && (
+                  <div className="w-2 h-2 bg-red-500 rounded-full" title="Sprint End"></div>
+                )}
+              </div>
             </div>
             <div className="relative" onMouseLeave={handleMouseUp}>
               {timeSlots.map((slot) => {
-                const isWorkDay = userSettings.workDays.includes(day.getDay());
+                const isDayWithinSprint = isWithinSprint(day);
                 
                 // Check if current time slot is within work hours when in 24-hour view
                 const isWithinWorkHours = show24Hours ? (() => {
@@ -437,20 +770,24 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
                   return slotTime >= workStart && slotTime < workEnd;
                 })() : true;
                 
-                const isInteractable = isWorkDay && (show24Hours ? isWithinWorkHours : true);
+                // A day is interactable if it's a work day, within sprint, and within work hours
+                const isInteractable = isWorkDay && isDayWithinSprint && (show24Hours ? isWithinWorkHours : true);
                 const isSelected = isDragging && selection?.day.getTime() === day.getTime() &&
                                    parse(slot.value, "HH:mm", day) >= parse(selection.startTime, "HH:mm", day) && 
                                    parse(slot.value, "HH:mm", day) < parse(selection.endTime, "HH:mm", day);
 
+                // Determine if this slot should be styled as available or unavailable
+                const isAvailableSlot = isWorkDay && isDayWithinSprint && (show24Hours ? isWithinWorkHours : true);
+
                 return (
                   <div
                     key={slot.value}
-                    onMouseDown={() => isInteractable && handleMouseDown(day, slot.value)}
-                    onMouseMove={() => isInteractable && handleMouseMove(slot.value)}
+                    onMouseDown={() => isAvailableSlot && handleMouseDown(day, slot.value)}
+                    onMouseMove={() => isAvailableSlot && handleMouseMove(slot.value)}
                     className={cn(
-                      "h-12 border-b border-r",
-                      isInteractable ? "bg-white cursor-pointer" : "bg-muted/80",
-                      isSelected && "bg-primary/20"
+                      "h-12 border-b border-r border-gray-200 transition-all duration-150 ease-in-out",
+                      isAvailableSlot ? "bg-white hover:bg-gray-50 cursor-pointer" : "bg-gray-100 cursor-not-allowed",
+                      isSelected && "bg-blue-100 shadow-sm border-blue-200"
                     )}
                   />
                 );
@@ -463,31 +800,69 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
                 return (
                   <div
                     key={block.id}
-                    className="absolute w-full text-white text-xs p-1 rounded-md z-10 group"
-                    style={{ top: `${top}rem`, height: `${height}rem`, backgroundColor: categoryColor }}
+                    data-block-id={block.id}
+                    className={cn(
+                      "absolute w-full text-white text-xs p-2 rounded-lg z-10 group shadow-sm hover:shadow-md transition-all duration-200 border border-white/20",
+                      isDraggingBlock && draggedBlock?.id === block.id && "z-50 shadow-2xl scale-105 rotate-1",
+                      "cursor-move"
+                    )}
+                    style={{ 
+                      top: `${top}rem`, 
+                      height: `${height}rem`, 
+                      backgroundColor: categoryColor,
+                      left: '2px',
+                      right: '2px',
+                      width: 'calc(100% - 4px)'
+                    }}
+                    onMouseDown={(e) => handleBlockMouseDown(block, e)}
                   >
-                    <div className="flex justify-between items-center">
-                      <span>{block.title}</span>
-                      <button
-                        className="text-white hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
+                    <div className="flex flex-col h-full">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-sm leading-tight">{block.title}</span>
+                        <button
+                          className="text-white hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity text-xs ml-1"
+                          onClick={(e) => {
                           e.stopPropagation(); // Prevent triggering the slot click
-                          if (confirm(`Are you sure you want to delete "${block.title}"?`)) {
-                            fetch(`/api/user/busy-hours/${block.id}`, {
-                              method: "DELETE",
-                            }).then(() => onBusyHourDeleted());
+                          
+                          if (block.recurringGroupId) {
+                            // Show custom dialog for recurring items
+                            const choice = prompt(`This is part of a recurring series. Choose an option:\n\n1 - Delete only this occurrence\n2 - Delete this and future occurrences\n3 - Delete all occurrences\n\nEnter 1, 2, or 3:`);
+                            
+                            if (choice === '1') {
+                              if (confirm(`Delete only this occurrence of "${block.title}"?`)) {
+                                handleDeleteBusyHour(block, 'single');
+                              }
+                            } else if (choice === '2') {
+                              if (confirm(`Delete this and all future occurrences of "${block.title}"?`)) {
+                                handleDeleteBusyHour(block, 'future');
+                              }
+                            } else if (choice === '3') {
+                              if (confirm(`Delete all occurrences of "${block.title}"?`)) {
+                                handleDeleteBusyHour(block, 'all');
+                              }
+                            }
+                          } else {
+                            // Non-recurring item - simple delete
+                            if (confirm(`Are you sure you want to delete "${block.title}"?`)) {
+                              handleDeleteBusyHour(block, 'single');
+                            }
                           }
                         }}
-                      >
-                        X
-                      </button>
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="text-xs opacity-90 leading-tight">
+                        {format(block.startTime, "HH:mm")} - {format(block.endTime, "HH:mm")}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -503,10 +878,11 @@ interface MonthViewProps {
 }
 
 function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewProps) {
+  const { weekStartsOn } = userSettings;
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const startDate = startOfWeek(monthStart, { weekStartsOn });
+  const endDate = endOfWeek(monthEnd, { weekStartsOn });
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
   const getAvailableHours = (day: Date) => {
@@ -572,9 +948,13 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
     return `hsl(${h}, ${s}%, ${l}%`;
   };
 
+  const dayHeaders = weekStartsOn === 0 
+    ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
   return (
     <div className="flex-grow grid grid-cols-7 grid-rows-6 border-t border-l">
-      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
+      {dayHeaders.map(day => (
         <div key={day} className="text-center font-semibold p-2 border-b border-r bg-muted/50">{day}</div>
       ))}
       {days.map((day) => {
@@ -590,7 +970,7 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
               isWeekend(day) && "bg-muted/50"
             )}
           >
-            <span className={cn("font-medium", isSameDay(day, new Date()) && "font-extrabold text-2xl text-primary")}>
+            <span className={cn("font-medium", isSameDay(day, new Date()) && "font-extrabold text-xl text-primary")}>
               {format(day, "d")}
             </span>
             <div className="mt-1 text-sm">

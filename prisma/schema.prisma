@@ -70,7 +70,7 @@ model Task {
   assigneeId     String?
   createdById    String?
   dependencyFor  Dependency[] @relation("TaskDependencyFor")
-  dependencies   Dependency[] @relation("TaskDependencies")
+  dependencies   Dependency?  @relation("TaskDependencies")
   notes          Note[]
   subTasks       SubTask[]
   assignee       User?        @relation(fields: [assigneeId], references: [id])
@@ -109,14 +109,15 @@ model Note {
 }
 
 model BusyHour {
-  id         String            @id @default(cuid())
-  title      String
-  startTime  DateTime
-  endTime    DateTime
-  userId     String
-  categoryId String?
-  category   BusyHourCategory? @relation(fields: [categoryId], references: [id])
-  user       User              @relation(fields: [userId], references: [id])
+  id               String            @id @default(cuid())
+  title            String
+  startTime        DateTime
+  endTime          DateTime
+  userId           String
+  categoryId       String?
+  recurringGroupId String?
+  category         BusyHourCategory? @relation(fields: [categoryId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
 }
 
 model BusyHourCategory {

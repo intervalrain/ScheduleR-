@@ -89,10 +89,16 @@ export function NewBusyHourDialog({
       });
 
       if (response.ok) {
+        const result = await response.json();
+        if (result.isRecurring && result.created > 0) {
+          alert(result.message);
+        }
         onBusyHourCreated();
         setIsOpen(false);
       } else {
-        console.error("Failed to create busy hour");
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to create busy hour");
+        console.error("Failed to create busy hour:", errorData);
       }
     } catch (error) {
       console.error("Error creating busy hour:", error);
@@ -174,6 +180,15 @@ export function NewBusyHourDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {repeatFrequency !== "none" && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <div></div>
+              <div className="col-span-3 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                ℹ️ Recurring events will automatically skip off-hours (non-work days, outside work hours, and non-sprint periods)
+              </div>
+            </div>
+          )}
 
           {repeatFrequency !== "none" && (
             <div className="grid grid-cols-4 items-center gap-4">

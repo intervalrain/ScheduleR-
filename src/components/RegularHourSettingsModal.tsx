@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface RegularHourSettingsModalProps {
   isOpen: boolean;
@@ -21,11 +22,13 @@ interface RegularHourSettingsModalProps {
     workHours: { start: string; end: string };
     workDays: number[];
     show24Hours: boolean;
+    weekStartsOn: 0 | 1;
   };
   onSave: (settings: {
     workHours?: { start: string; end: string };
     workDays?: number[];
     show24Hours?: boolean;
+    weekStartsOn?: 0 | 1;
   }) => void;
 }
 
@@ -48,11 +51,13 @@ export function RegularHourSettingsModal({
   const [workHours, setWorkHours] = useState(userSettings.workHours);
   const [workDays, setWorkDays] = useState(userSettings.workDays);
   const [show24Hours, setShow24Hours] = useState(userSettings.show24Hours || false);
+  const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(userSettings.weekStartsOn || 1);
 
   useEffect(() => {
     setWorkHours(userSettings.workHours);
     setWorkDays(userSettings.workDays);
     setShow24Hours(userSettings.show24Hours || false);
+    setWeekStartsOn(userSettings.weekStartsOn || 1);
   }, [userSettings]);
 
   const handleWorkDayChange = (dayId: number) => {
@@ -63,7 +68,7 @@ export function RegularHourSettingsModal({
   };
 
   const handleSave = () => {
-    onSave({ workHours, workDays, show24Hours });
+    onSave({ workHours, workDays, show24Hours, weekStartsOn });
     setIsOpen(false);
   };
 
@@ -125,6 +130,22 @@ export function RegularHourSettingsModal({
               onCheckedChange={(checked: boolean) => setShow24Hours(checked)}
             />
             <Label htmlFor="show-24-hours">Show 24-hour view</Label>
+          </div>
+
+          <div>
+            <Label htmlFor="week-start">Week Start</Label>
+            <Select
+              value={weekStartsOn.toString()}
+              onValueChange={(value) => setWeekStartsOn(parseInt(value) as 0 | 1)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Start with Monday</SelectItem>
+                <SelectItem value="0">Start with Sunday</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
