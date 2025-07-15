@@ -10,12 +10,9 @@ import {
   isWeekend,
   startOfMonth,
   endOfMonth,
-  eachWeekOfInterval,
   addMonths,
   subMonths,
   parse,
-  isWithinInterval,
-  addDays,
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
@@ -24,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 // Interfaces
 interface BusyHour {
+  categoryId: any;
   id: string;
   userId: string;
   startTime: Date;
@@ -181,6 +179,7 @@ export default function CalendarPage() {
         view={view}
         setView={setView}
         onOpenRegularHours={() => setIsRegularHoursModalOpen(true)}
+        onOpenCategoryModal={() => setIsCategoryModalOpen(true)}
       />
       <NewBusyHourDialog
         isOpen={isDialogOpen}
@@ -223,7 +222,7 @@ export default function CalendarPage() {
 }
 
 // Header Component
-function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours }: any) {
+function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours, onOpenCategoryModal }: any) {
   const handleViewChange = (newView: "week" | "month") => {
     setView(newView);
   };
@@ -241,17 +240,22 @@ function Header({ currentDate, setCurrentDate, view, setView, onOpenRegularHours
   return (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={() => handleDateNav('prev')}>Previous</Button>
-        <Button size="sm" onClick={() => handleDateNav('next')}>Next</Button>
+        <Button size="sm" onClick={() => handleDateNav('prev')}>{'<'}</Button>
+        <Button size="sm" onClick={() => handleDateNav('next')}>{'>'}</Button>
         <Button size="sm" variant="outline" onClick={() => setCurrentDate(new Date())}>Today</Button>
       </div>
       <h2 className="text-lg font-semibold">
         {format(currentDate, view === 'week' ? 'MMMM yyyy' : 'MMMM yyyy')}
       </h2>
-      <div className="flex items-center gap-2 p-1 bg-muted rounded-lg">
-        <Button size="sm" variant={view === 'week' ? 'primary' : 'ghost'} onClick={() => handleViewChange('week')}>Week</Button>
-        <Button size="sm" variant={view === 'month' ? 'primary' : 'ghost'} onClick={() => handleViewChange('month')}>Month</Button>
-        <Button size="sm" variant="outline" onClick={onOpenRegularHours}>Settings</Button>
+      <div className="flex items-center gap-2 p-1 space-x-2">
+        <div className="bg-muted rounded-lg">
+          <Button size="sm" variant={view === 'week' ? 'destructive' : 'ghost'} onClick={() => handleViewChange('week')}>Week</Button>
+          <Button size="sm" variant={view === 'month' ? 'destructive' : 'ghost'} onClick={() => handleViewChange('month')}>Month</Button>
+        </div>
+        <div className="rounded-lg space-x-4">
+          <Button size="sm" variant="outline" onClick={onOpenRegularHours}>Settings</Button>
+          <Button size="sm" variant="outline" onClick={onOpenCategoryModal}>Category</Button>
+        </div>
       </div>
     </div>
   );
@@ -461,6 +465,29 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: any) {
     });
   };
 
+  const isWithinAnySprint = (day: Date) => {
+    return sprints.some((sprint: Sprint) => {
+      const sprintStart = new Date(sprint.startDate);
+      const sprintEnd = new Date(sprint.endDate);
+      return day >= sprintStart && day <= sprintEnd;
+    });
+  };
+
+  const getSprintStatusForDay = (day: Date) => {
+    const dayStatus = [];
+    sprints.forEach((sprint: Sprint) => {
+      const sprintStart = new Date(sprint.startDate);
+      const sprintEnd = new Date(sprint.endDate);
+      if (isSameDay(day, sprintStart)) {
+        dayStatus.push({ type: 'start', sprint });
+      }
+      if (isSameDay(day, sprintEnd)) {
+        dayStatus.push({ type: 'end', sprint });
+      }
+    });
+    return dayStatus;
+  };
+
   const getAvailabilityColor = (availableHours: number) => {
     const maxHours = 8; // Assuming a standard 8-hour workday
     const percentage = Math.max(0, Math.min(1, availableHours / maxHours));
@@ -483,6 +510,8 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: any) {
       ))}
       {days.map((day) => {
         const availableHours = getAvailableHours(day);
+        const sprintStatuses = getSprintStatusForDay(day);
+        const withinSprint = isWithinAnySprint(day);
         return (
           <div 
             key={day.toString()} 
@@ -496,13 +525,23 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: any) {
               {format(day, "d")}
             </span>
             <div className="mt-1 text-sm">
-              <span 
-                className="font-bold text-white px-2 py-1 rounded-md text-xs"
-                style={{ backgroundColor: getAvailabilityColor(availableHours) }}
-              >
-                {availableHours.toFixed(1)}h
-              </span>
-              <div className="mt-1">
+              {withinSprint && (
+                <span 
+                  className="font-bold text-white px-2 py-1 rounded-md text-xs"
+                  style={{ backgroundColor: getAvailabilityColor(availableHours) }}
+                >
+                  {availableHours.toFixed(1)}h
+                </span>
+              )}
+              <div className="mt-1 space-y-1">
+                {sprintStatuses.map((status, index) => (
+                  <div key={index} className={cn(
+                    "text-xs px-1 py-0.5 rounded-md text-white font-medium",
+                    status.type === 'start' ? "bg-green-500" : "bg-red-500"
+                  )}>
+                    {status.type === 'start' ? 'Sprint Starts' : 'Sprint Ends'}
+                  </div>
+                ))}
                 {getSprintsForDay(day).map((sprint: Sprint) => (
                   <div key={sprint.id} className="text-xs bg-secondary text-secondary-foreground p-1 rounded-md">
                     {sprint.name}
