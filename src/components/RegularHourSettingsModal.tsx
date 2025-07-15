@@ -39,11 +39,12 @@ export function RegularHourSettingsModal({
 }: RegularHourSettingsModalProps) {
   const [workHours, setWorkHours] = useState(userSettings.workHours);
   const [workDays, setWorkDays] = useState(userSettings.workDays);
-  const [show24Hours, setShow24Hours] = useState(false); // New state for 24-hour view
+  const [show24Hours, setShow24Hours] = useState(userSettings.show24Hours || false);
 
   useEffect(() => {
     setWorkHours(userSettings.workHours);
     setWorkDays(userSettings.workDays);
+    setShow24Hours(userSettings.show24Hours || false);
   }, [userSettings]);
 
   const handleWorkDayChange = (dayId: number) => {
@@ -54,7 +55,7 @@ export function RegularHourSettingsModal({
   };
 
   const handleSave = () => {
-    onSave({ workHours, workDays });
+    onSave({ workHours, workDays, show24Hours });
     setIsOpen(false);
   };
 

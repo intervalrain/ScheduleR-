@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useTaskRefresh } from "@/context/TaskContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +30,8 @@ interface Task {
 
 export default function KanbanPage() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const { refreshTrigger, triggerRefresh } = useTaskRefresh();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,7 +39,7 @@ export default function KanbanPage() {
     if (session) {
       fetchTasks();
     }
-  }, [session]);
+  }, [session, refreshTrigger]);
 
   const fetchTasks = async () => {
     try {
@@ -60,7 +64,10 @@ export default function KanbanPage() {
   }) => {
     const { destination, source, draggableId } = result;
 
+    console.log('Drag result:', { destination, source, draggableId });
+
     if (!destination) {
+      console.log('No destination, canceling drag');
       return;
     }
 
@@ -68,51 +75,140 @@ export default function KanbanPage() {
       destination.droppableId === source.droppableId &&
       destination.index === source.index
     ) {
+      console.log('Same position, no change needed');
       return;
     }
 
-    const newTasks = Array.from(tasks);
-    const draggedTask = newTasks.find((task) => task.id === draggableId);
+    const draggedTask = tasks.find((task) => task.id === draggableId);
+    if (!draggedTask) {
+      console.log('Dragged task not found:', draggableId);
+      return;
+    }
 
-    if (draggedTask) {
-      const oldStatus = draggedTask.status;
-      draggedTask.status = destination.droppableId;
-      setTasks(newTasks);
+    const sourceStatus = source.droppableId;
+    const destStatus = destination.droppableId;
+    
+    console.log('Task move:', {
+      taskId: draggableId,
+      from: { status: sourceStatus, index: source.index },
+      to: { status: destStatus, index: destination.index }
+    });
+    
+    // Get tasks in the destination column, sorted by priority (excluding the dragged task)
+    const destTasks = tasks
+      .filter(task => task.status === destStatus && task.id !== draggableId)
+      .sort((a, b) => parseInt(a.priority || "1000000") - parseInt(b.priority || "1000000"));
+    
+    console.log('Destination tasks:', destTasks.map(t => ({ id: t.id, title: t.title, priority: t.priority })));
 
-      // Update task status via API
-      try {
-        const response = await fetch(`/api/tasks/${draggableId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: destination.droppableId }),
-        });
-        
-        if (!response.ok) {
-          // Revert the change if API call fails
-          draggedTask.status = oldStatus;
-          setTasks([...newTasks]);
-          console.error('Failed to update task status');
-        }
-      } catch (error) {
-        // Revert the change if API call fails
-        draggedTask.status = oldStatus;
-        setTasks([...newTasks]);
-        console.error('Error updating task status:', error);
+    let newPriority: string;
+    let targetIndex = destination.index;
+    
+    // Adjust index if we're moving within the same column
+    if (sourceStatus === destStatus) {
+      const draggedTaskIndex = tasks
+        .filter(task => task.status === destStatus)
+        .sort((a, b) => parseInt(a.priority || "1000000") - parseInt(b.priority || "1000000"))
+        .findIndex(task => task.id === draggableId);
+      
+      if (draggedTaskIndex !== -1 && draggedTaskIndex < destination.index) {
+        targetIndex = destination.index - 1;
       }
+    }
+    
+    console.log('Target index adjusted to:', targetIndex);
+    
+    if (destTasks.length === 0) {
+      // First task in empty column
+      newPriority = "1000000";
+      console.log('Empty column, using default priority:', newPriority);
+    } else if (targetIndex === 0) {
+      // Moving to top of column
+      const firstTaskPriority = parseInt(destTasks[0].priority || "1000000");
+      newPriority = Math.max(100000, firstTaskPriority - 100000).toString();
+      console.log('Moving to top, new priority:', newPriority, 'first task priority:', firstTaskPriority);
+    } else if (targetIndex >= destTasks.length) {
+      // Moving to bottom of column
+      const lastTaskPriority = parseInt(destTasks[destTasks.length - 1].priority || "1000000");
+      newPriority = (lastTaskPriority + 100000).toString();
+      console.log('Moving to bottom, new priority:', newPriority, 'last task priority:', lastTaskPriority);
+    } else {
+      // Moving between two tasks
+      const prevTaskPriority = parseInt(destTasks[targetIndex - 1].priority || "1000000");
+      const nextTaskPriority = parseInt(destTasks[targetIndex].priority || "1000000");
+      newPriority = Math.floor((prevTaskPriority + nextTaskPriority) / 2).toString();
+      
+      console.log('Moving between tasks:', {
+        prevPriority: prevTaskPriority,
+        nextPriority: nextTaskPriority,
+        calculatedPriority: newPriority
+      });
+      
+      // Ensure we don't get the same priority as existing tasks
+      if (newPriority === prevTaskPriority.toString() || newPriority === nextTaskPriority.toString()) {
+        newPriority = (prevTaskPriority + Math.floor((nextTaskPriority - prevTaskPriority) / 3)).toString();
+        console.log('Adjusted priority to avoid conflict:', newPriority);
+      }
+    }
+
+    // Update task locally
+    const newTasks = tasks.map(task => 
+      task.id === draggableId 
+        ? { ...task, status: destStatus, priority: newPriority }
+        : task
+    );
+    setTasks(newTasks);
+
+    // Update task via API
+    try {
+      const updateData: any = { priority: newPriority };
+      if (sourceStatus !== destStatus) {
+        updateData.status = destStatus;
+      }
+
+      console.log('Updating task via API:', { taskId: draggableId, updateData });
+
+      const response = await fetch(`/api/tasks/${draggableId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API update failed:', response.status, errorText);
+        // Revert the change if API call fails
+        setTasks(tasks);
+      } else {
+        const result = await response.json();
+        console.log('Task updated successfully:', result);
+        // Trigger refresh for sidebar and other components
+        triggerRefresh();
+      }
+    } catch (error) {
+      // Revert the change if API call fails
+      setTasks(tasks);
+      console.error('Error updating task:', error);
     }
   };
 
   const getTasksByStatus = (status: string) => {
-    return tasks.filter((task) => task.status === status);
+    return tasks
+      .filter((task) => task.status === status)
+      .sort((a, b) => parseInt(a.priority || "1000000") - parseInt(b.priority || "1000000"));
   };
 
   const getPriorityColor = (priority?: string) => {
-    switch (priority) {
-      case 'HIGH': return 'destructive';
-      case 'MEDIUM': return 'default';
-      case 'LOW': return 'secondary';
-      default: return 'outline';
-    }
+    if (!priority) return 'outline';
+    const priorityNum = parseInt(priority);
+    if (priorityNum < 600000) return 'destructive'; // High priority
+    if (priorityNum < 800000) return 'default';     // Medium priority
+    return 'secondary'; // Low priority
+  };
+
+  const handleTaskClick = (taskId: string) => {
+    console.log('Kanban: Task clicked:', taskId, 'Type:', typeof taskId);
+    router.push(`/workspace/${taskId}`);
   };
 
   if (!session) {
@@ -173,19 +269,25 @@ export default function KanbanPage() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`transition-shadow hover:shadow-md ${
+                              className={`transition-shadow hover:shadow-md cursor-pointer ${
                                 snapshot.isDragging ? 'shadow-lg rotate-2' : ''
                               }`}
+                              onClick={(e) => {
+                                // Only navigate if not dragging
+                                if (!snapshot.isDragging) {
+                                  handleTaskClick(task.id);
+                                }
+                              }}
                             >
                               <CardContent className="p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
                                   <h3 className="font-medium leading-tight">{task.title}</h3>
-                                  {task.priority && (
+                                  {task.priority && parseInt(task.priority) < 700000 && (
                                     <Badge 
                                       variant={getPriorityColor(task.priority) as 'default' | 'destructive' | 'secondary' | 'outline'}
                                       className="text-xs shrink-0"
                                     >
-                                      {task.priority}
+                                      High Priority
                                     </Badge>
                                   )}
                                 </div>

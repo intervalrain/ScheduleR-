@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserIcon } from "lucide-react";
+import { useTaskRefresh } from "@/context/TaskContext";
 
 interface TeamMember {
   id: string;
@@ -30,11 +31,12 @@ interface NewTaskDialogProps {
 
 export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDialogProps) {
   const { data: session } = useSession();
+  const { triggerRefresh } = useTaskRefresh();
   const [taskName, setTaskName] = useState("");
   const [description, setDescription] = useState("");
   const [estimate, setEstimate] = useState("");
   const [assigneeId, setAssigneeId] = useState<string>("unassigned");
-  const [priority, setPriority] = useState("MEDIUM");
+  const [priority, setPriority] = useState("1000000"); // 預設排在後面
   const [status, setStatus] = useState("TODO");
   const [tags, setTags] = useState("");
   const [labels, setLabels] = useState("");
@@ -68,36 +70,55 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
     if (!taskName.trim()) return;
     
     setLoading(true);
+    
+    const taskData = {
+      name: taskName,
+      description,
+      estimatedHours: estimate && !isNaN(parseFloat(estimate)) ? parseFloat(estimate) : null,
+      assigneeId: assigneeId && assigneeId !== "unassigned" ? assigneeId : null,
+      priority,
+      status,
+      sprintId: selectedSprintId || null,
+      tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
+      labels: labels ? labels.split(',').map(label => label.trim()).filter(label => label) : [],
+    };
+    
+    console.log('Sending task data:', taskData);
+    
     try {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: taskName,
-          description,
-          estimate: estimate ? parseInt(estimate) : null,
-          assigneeId: assigneeId && assigneeId !== "unassigned" ? assigneeId : null,
-          priority,
-          status,
-          sprintId: selectedSprintId || null,
-          tags: tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-          labels: labels ? labels.split(',').map(label => label.trim()).filter(label => label) : [],
-        }),
+        body: JSON.stringify(taskData),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (response.ok) {
+        const result = await response.json();
+        console.log('Task created successfully:', result);
         setTaskName("");
         setDescription("");
         setEstimate("");
         setAssigneeId(session?.user?.id || "unassigned");
-        setPriority("MEDIUM");
+        setPriority("1000000");
         setStatus("TODO");
         setTags("");
         setLabels("");
         setIsOpen(false);
-        window.location.reload();
+        triggerRefresh();
       } else {
-        throw new Error('Failed to create task');
+        const errorText = await response.text();
+        console.error('Response error text:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        console.error('API Error:', response.status, errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}: ${errorText}`);
       }
     } catch (error) {
       console.error('Error creating task:', error);
@@ -147,7 +168,6 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
             </label>
             <Input 
               id="estimate" 
-              type="number" 
               className="col-span-3" 
               value={estimate}
               onChange={(e) => setEstimate(e.target.value)}
@@ -163,9 +183,8 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="HIGH">🔴 High</SelectItem>
-                <SelectItem value="MEDIUM">🟡 Medium</SelectItem>
-                <SelectItem value="LOW">🟢 Low</SelectItem>
+                <SelectItem value="500000">⬆️ Higher Priority</SelectItem>
+                <SelectItem value="1000000">⬇️ Lower Priority</SelectItem>
               </SelectContent>
             </Select>
           </div>

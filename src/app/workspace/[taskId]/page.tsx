@@ -126,15 +126,26 @@ export default function WorkspacePage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/workspace/task/${taskId}`);
+      console.log('Workspace: Fetching task with ID:', taskId, 'Type:', typeof taskId, 'Length:', taskId?.length);
+      
+      const url = `/api/workspace/task/${taskId}`;
+      console.log('Fetch URL:', url);
+      
+      const response = await fetch(url);
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
-        throw new Error('Failed to fetch task');
+        const errorText = await response.text();
+        console.error('Response error:', response.status, errorText);
+        throw new Error(`Failed to fetch task: ${response.status} ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('Task data received:', data);
       setTask(data);
     } catch (err) {
+      console.error('Fetch task error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);

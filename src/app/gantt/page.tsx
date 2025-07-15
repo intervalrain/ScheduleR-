@@ -5,6 +5,7 @@ import Gantt from "frappe-gantt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CalendarIcon, RefreshCwIcon } from "lucide-react";
+import { useTaskRefresh } from "@/context/TaskContext";
 
 interface Task {
   id: string;
@@ -19,6 +20,7 @@ interface Task {
 
 export default function GanttPage() {
   const ganttRef = useRef<HTMLDivElement>(null);
+  const { refreshTrigger } = useTaskRefresh();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export default function GanttPage() {
     try {
       // For now, fetch all tasks with any status
       // In a real app, you might want to filter by sprint
-      const response = await fetch('/api/tasks?status=Ongoing');
+      const response = await fetch('/api/tasks');
       if (response.ok) {
         const taskData = await response.json();
         setTasks(taskData);
@@ -76,7 +78,7 @@ export default function GanttPage() {
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [refreshTrigger]);
 
   useEffect(() => {
     if (ganttRef.current && tasks.length > 0) {

@@ -5,13 +5,18 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import prisma from '@/lib/prisma';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
+  console.log('GET /api/workspace/task/[id] called with id:', params.id);
+  
   const session = await getServerSession(authOptions);
+  console.log('Session:', session?.user?.email);
 
   if (!session || !session.user || !session.user.email) {
+    console.log('Unauthorized - no session');
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = params;
+  console.log('Task ID type:', typeof id, 'Value:', id, 'Length:', id?.length);
 
   try {
     const user = await prisma.user.findUnique({
@@ -19,9 +24,54 @@ export async function GET(request: Request, { params }: { params: { id: string }
     });
 
     if (!user) {
+      console.log('User not found for email:', session.user.email);
       return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
+    console.log('User found:', user.id);
+    console.log('Looking for task with id:', id);
+    
+    // First, let's check if the task exists at all
+    const taskExists = await prisma.task.findFirst({
+      where: { id },
+      select: { id: true, title: true, createdById: true, assigneeId: true }
+    });
+    
+    console.log('Task exists check:', taskExists);
+    
+    // Try a simpler query first to isolate the issue
+    console.log('Attempting basic task fetch...');
+    const basicTask = await prisma.task.findUnique({
+      where: { id },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        }
+      },
+    });
+    
+    console.log('Basic task fetch result:', basicTask ? 'Success' : 'Not found');
+    
+    if (!basicTask) {
+      console.log('Task not found with id:', id);
+      return NextResponse.json({ message: "Task not found" }, { status: 404 });
+    }
+    
+    // Now try to add sub-tasks and notes
+    console.log('Fetching full task data...');
     const task = await prisma.task.findUnique({
       where: { id },
       include: {
@@ -42,6 +92,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
           }
         },
         subTasks: {
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              }
+            }
+          },
           orderBy: {
             createdAt: 'asc'
           }
@@ -60,45 +120,41 @@ export async function GET(request: Request, { params }: { params: { id: string }
           orderBy: {
             createdAt: 'desc'
           }
-        },
-        dependsOn: {
-          include: {
-            task: {
-              select: {
-                id: true,
-                title: true,
-                status: true,
-              }
-            }
-          }
-        },
-        dependencyOf: {
-          include: {
-            dependsOn: {
-              select: {
-                id: true,
-                title: true,
-                status: true,
-              }
-            }
-          }
         }
       },
     });
 
     if (!task) {
+      console.log('Task not found with id:', id);
       return NextResponse.json({ message: "Task not found" }, { status: 404 });
     }
 
+    console.log('Task found:', { 
+      id: task.id, 
+      title: task.title, 
+      createdById: task.createdById, 
+      assigneeId: task.assigneeId 
+    });
+
     // Check if user has permission to view this task
     if (task.createdById !== user.id && task.assigneeId !== user.id) {
+      console.log('Permission denied for user:', user.id, 'on task:', task.id);
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
+    console.log('Permission granted, returning task data');
+
     return NextResponse.json(task);
   } catch (error) {
-    console.error('Error fetching task:', error);
-    return NextResponse.json({ message: 'Failed to fetch task' }, { status: 500 });
+    console.error('Error fetching task - Full error:', error);
+    console.error('Error name:', error instanceof Error ? error.name : 'Unknown');
+    console.error('Error message:', error instanceof Error ? error.message : 'Unknown');
+    console.error('Error stack:', error instanceof Error ? error.stack : 'Unknown');
+    return NextResponse.json({ 
+      message: 'Failed to fetch task',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: error instanceof Error ? error.stack : 'No stack trace'
+    }, { status: 500 });
   }
 }
 

@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import { NewTaskDialogProvider, useNewTaskDialog } from "@/components/NewTaskDialogProvider";
+import { TaskProvider } from "@/context/TaskContext";
 import { useHotkeys } from "react-hotkeys-hook";
 import { CommandPalette } from "@/components/CommandPalette";
 import Header from "@/components/Header";
@@ -57,9 +58,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SessionProvider>
-          <NewTaskDialogProvider>
-            <AppProviders>{children}</AppProviders>
-          </NewTaskDialogProvider>
+          <TaskProvider>
+            <NewTaskDialogProvider>
+              <AppProviders>{children}</AppProviders>
+            </NewTaskDialogProvider>
+          </TaskProvider>
         </SessionProvider>
       </body>
     </html>

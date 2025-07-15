@@ -362,6 +362,16 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
             <div className="relative" onMouseLeave={handleMouseUp}>
               {timeSlots.map((slot, index) => {
                 const isWorkDay = userSettings.workDays.includes(day.getDay());
+                
+                // Check if current time slot is within work hours when in 24-hour view
+                const isWithinWorkHours = show24Hours ? (() => {
+                  const slotTime = parse(slot.value, "HH:mm", new Date());
+                  const workStart = parse(workHours.start, "HH:mm", new Date());
+                  const workEnd = parse(workHours.end, "HH:mm", new Date());
+                  return slotTime >= workStart && slotTime < workEnd;
+                })() : true;
+                
+                const isInteractable = isWorkDay && (show24Hours ? isWithinWorkHours : true);
                 const isSelected = isDragging && selection?.day.getTime() === day.getTime() &&
                                    parse(slot.value, "HH:mm", day) >= parse(selection.startTime, "HH:mm", day) && 
                                    parse(slot.value, "HH:mm", day) < parse(selection.endTime, "HH:mm", day);
@@ -369,11 +379,11 @@ function WeekView({ currentDate, userSettings, busyHours, onRangeSelected, onBus
                 return (
                   <div
                     key={slot.value}
-                    onMouseDown={() => isWorkDay && handleMouseDown(day, slot.value)}
-                    onMouseMove={() => isWorkDay && handleMouseMove(slot.value)}
+                    onMouseDown={() => isInteractable && handleMouseDown(day, slot.value)}
+                    onMouseMove={() => isInteractable && handleMouseMove(slot.value)}
                     className={cn(
                       "h-12 border-b border-r",
-                      isWorkDay ? "bg-white cursor-pointer" : "bg-muted/50",
+                      isInteractable ? "bg-white cursor-pointer" : "bg-muted/80",
                       isSelected && "bg-primary/20"
                     )}
                   />

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { useTaskRefresh } from "@/context/TaskContext";
 
 interface Task {
   id: string;
@@ -13,6 +14,7 @@ interface Task {
 
 export default function Sidebar() {
   const { data: session, status } = useSession();
+  const { refreshTrigger } = useTaskRefresh();
   const [ongoingTasks, setOngoingTasks] = useState<Task[]>([]);
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function Sidebar() {
     };
 
     fetchOngoingTasks();
-  }, [session, status]);
+  }, [session, status, refreshTrigger]);
 
   const onDragEnd = async (result: {
     destination?: { droppableId: string; index: number } | null;
