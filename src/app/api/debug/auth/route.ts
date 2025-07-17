@@ -5,7 +5,7 @@ export async function GET() {
     const clientId = process.env.GOOGLE_CLIENT_ID || "";
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
     
-    const diagnostics = {
+    const diagnostics: any = {
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV,
       status: "OK",
@@ -25,20 +25,14 @@ export async function GET() {
 
     // 安全地檢查格式
     if (clientId.length > 15) {
-      diagnostics.values = {
-        ...diagnostics.values,
-        googleClientIdPrefix: clientId.substring(0, 15) + "...",
-        googleClientIdSuffix: "..." + clientId.substring(Math.max(0, clientId.length - 15)),
-        endsWithGoogleDomain: clientId.endsWith('.apps.googleusercontent.com'),
-      };
+      diagnostics.values.googleClientIdPrefix = clientId.substring(0, 15) + "...";
+      diagnostics.values.googleClientIdSuffix = "..." + clientId.substring(Math.max(0, clientId.length - 15));
+      diagnostics.values.endsWithGoogleDomain = clientId.endsWith('.apps.googleusercontent.com');
     }
 
     if (clientSecret.length > 10) {
-      diagnostics.values = {
-        ...diagnostics.values,
-        googleClientSecretPrefix: clientSecret.substring(0, 10) + "...",
-        startsWithGOCSPX: clientSecret.startsWith('GOCSPX-'),
-      };
+      diagnostics.values.googleClientSecretPrefix = clientSecret.substring(0, 10) + "...";
+      diagnostics.values.startsWithGOCSPX = clientSecret.startsWith('GOCSPX-');
     }
 
     return NextResponse.json(diagnostics);
