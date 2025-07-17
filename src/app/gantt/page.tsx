@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Gantt from "frappe-gantt";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,15 +16,28 @@ interface Task {
   estimateHours?: number;
   progress?: number;
   dependsOn?: { id: string }[];
+  priority?: string;
+  subtasks?: { id: string; isCompleted: boolean }[];
 }
 
+// Helper function to calculate position and width
+const getTaskPosition = (startDate: Date, endDate: Date, chartStartDate: Date, chartEndDate: Date, chartWidth: number) => {
+  const totalDays = Math.ceil((chartEndDate.getTime() - chartStartDate.getTime()) / (1000 * 60 * 60 * 24));
+  const startDays = Math.ceil((startDate.getTime() - chartStartDate.getTime()) / (1000 * 60 * 60 * 24));
+  const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  const left = (startDays / totalDays) * chartWidth;
+  const width = (duration / totalDays) * chartWidth;
+  
+  return { left: Math.max(0, left), width: Math.max(10, width) };
+};
+
 export default function GanttPage() {
-  const ganttRef = useRef<HTMLDivElement>(null);
   const { refreshTrigger } = useTaskRefresh();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<string>('Week');
+  const [viewMode, setViewMode] = useState<string>('Month');
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -36,41 +48,93 @@ export default function GanttPage() {
       const response = await fetch('/api/tasks');
       if (response.ok) {
         const taskData = await response.json();
-        setTasks(taskData);
+        
+        // Fetch subtasks for each task to calculate completion
+        const tasksWithSubtasks = await Promise.all(
+          taskData.map(async (task: Task) => {
+            try {
+              const subtasksResponse = await fetch(`/api/tasks/${task.id}/subtasks`);
+              if (subtasksResponse.ok) {
+                const subtasks = await subtasksResponse.json();
+                const completedSubtasks = subtasks.filter((st: any) => st.isCompleted).length;
+                const totalSubtasks = subtasks.length;
+                const calculatedProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+                
+                return {
+                  ...task,
+                  subtasks,
+                  progress: calculatedProgress
+                };
+              }
+              return { ...task, subtasks: [], progress: 0 };
+            } catch (error) {
+              console.error(`Error fetching subtasks for task ${task.id}:`, error);
+              return { ...task, subtasks: [], progress: 0 };
+            }
+          })
+        );
+        
+        setTasks(tasksWithSubtasks);
       } else {
         throw new Error('Failed to fetch tasks');
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
       setError('Failed to load tasks');
-      // Fallback to mock data
+      // Fallback to mock data with current dates
+      const today = new Date();
+      const formatDate = (date: Date) => date.toISOString().split('T')[0];
+      
       setTasks([
         {
           id: "task1",
           title: "Redesign website",
-          status: "Ongoing",
-          startDate: "2024-07-01",
-          endDate: "2024-07-15",
+          status: "IN_PROGRESS",
+          startDate: formatDate(today),
+          endDate: formatDate(new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)),
           progress: 50,
           estimateHours: 40,
+          priority: "500000"
         },
         {
           id: "task2", 
           title: "Develop backend API",
-          status: "Ongoing",
-          startDate: "2024-07-05",
-          endDate: "2024-07-25",
+          status: "IN_PROGRESS",
+          startDate: formatDate(new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)),
+          endDate: formatDate(new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000)),
           progress: 30,
           estimateHours: 60,
+          priority: "600000"
         },
         {
           id: "task3",
           title: "Deploy to production", 
-          status: "Pending",
-          startDate: "2024-07-20",
-          endDate: "2024-07-30",
+          status: "TODO",
+          startDate: formatDate(new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000)),
+          endDate: formatDate(new Date(today.getTime() + 25 * 24 * 60 * 60 * 1000)),
           progress: 0,
           estimateHours: 20,
+          priority: "700000"
+        },
+        {
+          id: "task4",
+          title: "Testing & QA",
+          status: "TODO",
+          startDate: formatDate(new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000)),
+          endDate: formatDate(new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)),
+          progress: 0,
+          estimateHours: 25,
+          priority: "800000"
+        },
+        {
+          id: "task5",
+          title: "User Documentation",
+          status: "DONE",
+          startDate: formatDate(new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000)),
+          endDate: formatDate(new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000)),
+          progress: 100,
+          estimateHours: 15,
+          priority: "400000"
         },
       ]);
     } finally {
@@ -82,140 +146,64 @@ export default function GanttPage() {
     fetchTasks();
   }, [refreshTrigger]);
 
-  useEffect(() => {
-    if (ganttRef.current && tasks.length > 0) {
-      // Clear previous gantt instance
-      ganttRef.current.innerHTML = '';
-      
-      // Convert tasks to Gantt format
-      const ganttTasks = tasks.filter(task => task && task.id && task.title).map(task => {
-        const today = new Date();
-        const startDate = task.startDate ? new Date(task.startDate) : today;
-        const endDate = task.endDate ? new Date(task.endDate) : new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-        
-        return {
-          id: task.id,
-          name: task.title || 'Untitled Task',
-          start: startDate.toISOString().split('T')[0],
-          end: endDate.toISOString().split('T')[0],
-          progress: task.progress || 0,
-          dependencies: task.dependsOn?.map(dep => dep.id).join(',') || '',
-          custom_class: task.status === 'Done' ? 'gantt-task-done' : 
-                      task.status === 'Ongoing' ? 'gantt-task-ongoing' : 
-                      'gantt-task-pending'
-        };
-      });
+  // Calculate chart date range
+  const getChartDateRange = () => {
+    if (tasks.length === 0) return { start: new Date(), end: new Date() };
+    
+    const dates = tasks.flatMap(task => [
+      task.startDate ? new Date(task.startDate) : new Date(),
+      task.endDate ? new Date(task.endDate) : new Date()
+    ]);
+    
+    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+    
+    // Add some padding
+    const paddingDays = 7;
+    minDate.setDate(minDate.getDate() - paddingDays);
+    maxDate.setDate(maxDate.getDate() + paddingDays);
+    
+    return { start: minDate, end: maxDate };
+  };
 
-      // Only create Gantt if we have valid tasks
-      if (ganttTasks.length === 0) {
-        ganttRef.current.innerHTML = '<div class="text-center py-8 text-gray-500">No valid tasks to display</div>';
-        return;
-      }
-
-      try {
-        new Gantt(ganttRef.current, ganttTasks, {
-          header_height: 50,
-          column_width: 30,
-          step: 24,
-          // @ts-expect-error - frappe-gantt types are not compatible with string array
-          view_modes: ["Quarter Day", "Half Day", "Day", "Week", "Month"],
-          // @ts-expect-error - frappe-gantt types are not compatible with string type
-          view_mode: viewMode,
-          bar_height: 20,
-          bar_corner_radius: 3,
-          arrow_curve: 5,
-          padding: 18,
-          date_format: "YYYY-MM-DD",
-          language: "en",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          custom_popup_html: function(task: any) {
-            const originalTask = tasks.find(t => t.id === task.id);
-            return `
-              <div class="bg-white p-4 rounded-lg shadow-lg border max-w-sm">
-                <h4 class="font-semibold text-lg mb-2">${task.name}</h4>
-                <div class="space-y-2">
-                  <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">Status:</span>
-                    <span class="text-sm font-medium ${
-                      originalTask?.status === 'Done' ? 'text-green-600' : 
-                      originalTask?.status === 'Ongoing' ? 'text-blue-600' : 
-                      'text-gray-600'
-                    }">${originalTask?.status || 'Unknown'}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">Progress:</span>
-                    <span class="text-sm font-medium">${task.progress}%</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-sm text-gray-600">Duration:</span>
-                    <span class="text-sm">${task.start} → ${task.end}</span>
-                  </div>
-                  ${originalTask?.estimateHours ? `
-                    <div class="flex justify-between">
-                      <span class="text-sm text-gray-600">Estimate:</span>
-                      <span class="text-sm">${originalTask.estimateHours}h</span>
-                    </div>
-                  ` : ''}
-                </div>
-              </div>
-            `;
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          on_click: function (task: any) {
-            console.log('Task clicked:', task);
-            // Navigate to workspace page
-            window.location.href = `/workspace/${task.id}`;
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          on_date_change: function (task: any, start: any, end: any) {
-            console.log('Date changed:', task, start, end);
-            // Update task dates via API
-            fetch(`/api/tasks/${task.id}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                startDate: start.toISOString(),
-                endDate: end.toISOString(),
-              }),
-            }).then(() => {
-              // Refresh tasks after update
-              fetchTasks();
-            }).catch(error => {
-              console.error('Error updating task dates:', error);
-            });
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          on_progress_change: function (task: any, progress: any) {
-            console.log('Progress changed:', task, progress);
-            // Update task progress via API
-            fetch(`/api/tasks/${task.id}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                progress: progress,
-              }),
-            }).then(() => {
-              // Refresh tasks after update
-              fetchTasks();
-            }).catch(error => {
-              console.error('Error updating task progress:', error);
-            });
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          on_view_change: function (mode: any) {
-            console.log('View changed to:', mode);
-            // Could save user preference
-          },
-        });
-      } catch (error) {
-        console.error('Error creating Gantt chart:', error);
+  // Generate time headers based on view mode
+  const generateTimeHeaders = (startDate: Date, endDate: Date) => {
+    const headers: string[] = [];
+    const current = new Date(startDate);
+    
+    while (current <= endDate) {
+      if (viewMode === 'Day') {
+        headers.push(current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        current.setDate(current.getDate() + 1);
+      } else if (viewMode === 'Week') {
+        headers.push(`Week ${Math.ceil(current.getDate() / 7)}`);
+        current.setDate(current.getDate() + 7);
+      } else { // Month
+        headers.push(current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+        current.setMonth(current.getMonth() + 1);
       }
     }
-  }, [tasks, viewMode]);
+    
+    return headers;
+  };
+
+  // Sort tasks by status and priority
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const statusPriority = { 'DONE': 1, 'IN_PROGRESS': 2, 'REVIEW': 3, 'TODO': 4 };
+    const aStatusPriority = statusPriority[a.status as keyof typeof statusPriority] || 5;
+    const bStatusPriority = statusPriority[b.status as keyof typeof statusPriority] || 5;
+    
+    if (aStatusPriority !== bStatusPriority) {
+      return aStatusPriority - bStatusPriority;
+    }
+    
+    const aPriority = parseInt(a.priority || '1000000');
+    const bPriority = parseInt(b.priority || '1000000');
+    return aPriority - bPriority;
+  });
+
+  const chartDateRange = getChartDateRange();
+  const timeHeaders = generateTimeHeaders(chartDateRange.start, chartDateRange.end);
 
   if (loading) {
     return (
@@ -255,8 +243,6 @@ export default function GanttPage() {
                   <SelectValue placeholder="View" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Quarter Day">Quarter Day</SelectItem>
-                  <SelectItem value="Half Day">Half Day</SelectItem>
                   <SelectItem value="Day">Day</SelectItem>
                   <SelectItem value="Week">Week</SelectItem>
                   <SelectItem value="Month">Month</SelectItem>
@@ -284,7 +270,68 @@ export default function GanttPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <div ref={ganttRef} className="min-w-full"></div>
+              <div className="min-w-full">
+                {/* Gantt Chart Header */}
+                <div className="flex border-b">
+                  <div className="w-64 p-3 border-r bg-gray-50 font-semibold">
+                    Task Name
+                  </div>
+                  <div className="flex-1 grid grid-cols-12 min-w-[800px]">
+                    {timeHeaders.map((header, index) => (
+                      <div key={index} className="p-2 text-center text-sm font-medium border-r bg-gray-50">
+                        {header}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Gantt Chart Body */}
+                <div className="min-h-[400px]">
+                  {sortedTasks.map((task, taskIndex) => {
+                    const startDate = task.startDate ? new Date(task.startDate) : new Date();
+                    const endDate = task.endDate ? new Date(task.endDate) : new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
+                    const position = getTaskPosition(startDate, endDate, chartDateRange.start, chartDateRange.end, 800);
+                    
+                    const statusColor = 
+                      task.status === 'DONE' ? 'bg-green-500' :
+                      task.status === 'IN_PROGRESS' ? 'bg-blue-500' :
+                      task.status === 'REVIEW' ? 'bg-yellow-500' :
+                      'bg-gray-400';
+                    
+                    return (
+                      <div key={task.id} className={`flex border-b ${taskIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <div className="w-64 p-3 border-r">
+                          <div className="font-medium text-sm truncate">{task.title}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {task.progress}% complete
+                          </div>
+                        </div>
+                        <div className="flex-1 relative min-w-[800px] h-12">
+                          <div 
+                            className={`absolute top-2 h-8 ${statusColor} rounded flex items-center justify-center text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity`}
+                            style={{
+                              left: `${position.left}px`,
+                              width: `${position.width}px`
+                            }}
+                            onClick={() => window.location.href = `/workspace/${task.id}`}
+                            title={`${task.title} (${task.progress}%)`}
+                          >
+                            {task.progress > 0 && (
+                              <div 
+                                className="absolute left-0 top-0 h-full bg-green-600 rounded-l"
+                                style={{ width: `${task.progress}%` }}
+                              />
+                            )}
+                            <span className="relative z-10 px-2 truncate">
+                              {task.title}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

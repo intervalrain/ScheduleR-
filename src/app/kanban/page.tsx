@@ -26,6 +26,8 @@ interface Task {
   estimatedHours?: number;
   assignee?: User;
   createdBy?: User;
+  subtasks?: { id: string; isCompleted: boolean }[];
+  completionPercentage?: number;
 }
 
 export default function KanbanPage() {
@@ -46,7 +48,33 @@ export default function KanbanPage() {
       const response = await fetch('/api/tasks');
       if (response.ok) {
         const fetchedTasks = await response.json();
-        setTasks(fetchedTasks);
+        
+        // Fetch subtasks for each task to calculate completion
+        const tasksWithCompletion = await Promise.all(
+          fetchedTasks.map(async (task: Task) => {
+            try {
+              const subtasksResponse = await fetch(`/api/tasks/${task.id}/subtasks`);
+              if (subtasksResponse.ok) {
+                const subtasks = await subtasksResponse.json();
+                const completedSubtasks = subtasks.filter((st: any) => st.isCompleted).length;
+                const totalSubtasks = subtasks.length;
+                const completionPercentage = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+                
+                return {
+                  ...task,
+                  subtasks,
+                  completionPercentage
+                };
+              }
+              return { ...task, subtasks: [], completionPercentage: 0 };
+            } catch (error) {
+              console.error(`Error fetching subtasks for task ${task.id}:`, error);
+              return { ...task, subtasks: [], completionPercentage: 0 };
+            }
+          })
+        );
+        
+        setTasks(tasksWithCompletion);
       } else {
         console.error('Failed to fetch tasks');
       }
@@ -237,12 +265,13 @@ export default function KanbanPage() {
       </div>
       
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {["TODO", "IN_PROGRESS", "DONE"].map((status) => {
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {["TODO", "IN_PROGRESS", "REVIEW", "DONE"].map((status) => {
             const statusTasks = getTasksByStatus(status);
             const statusLabels = {
               "TODO": "To Do",
               "IN_PROGRESS": "In Progress", 
+              "REVIEW": "Review",
               "DONE": "Done"
             };
             
@@ -327,6 +356,29 @@ export default function KanbanPage() {
                                     </div>
                                   )}
                                 </div>
+                                
+                                {/* Progress bar for subtasks completion */}
+                                {task.subtasks && task.subtasks.length > 0 && (
+                                  <div className="pt-2 border-t">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-xs text-muted-foreground">
+                                        Progress ({task.subtasks.filter(st => st.isCompleted).length}/{task.subtasks.length})
+                                      </span>
+                                      <span className="text-xs font-medium">
+                                        {task.completionPercentage}%
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                      <div 
+                                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                                          task.completionPercentage === 100 ? 'bg-green-500' : 
+                                          task.completionPercentage >= 50 ? 'bg-blue-500' : 'bg-yellow-500'
+                                        }`}
+                                        style={{ width: `${task.completionPercentage}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                )}
                               </CardContent>
                             </Card>
                           )}

@@ -716,7 +716,7 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
           <div className="h-14 border-b border-r border-gray-200 bg-gray-50"></div> {/* Empty cell for alignment */}
           {timeSlots.map((slot) => (
             <div key={slot.value} className="h-12 flex items-center justify-center border-b border-r border-gray-200 bg-gray-50">
-              <span className="text-xs text-gray-600 font-medium">{slot.value}</span>
+              <span className="text-xs text-gray-600 font-medium">{slot.display}</span>
             </div>
           ))}
         </div>
