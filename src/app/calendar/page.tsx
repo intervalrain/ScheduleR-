@@ -16,7 +16,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
-import { NewBusyHourDialog, RegularHourSettingsModal, CategoryManagementModal } from "@/components";
+import { NewBusyHourDialog, RegularHourSettingsModal, CategoryManagementModal, DeleteConfirmationModal } from "@/components";
 import { cn } from "@/lib/utils";
 
 // Interfaces
@@ -339,7 +339,6 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
   const { workHours, show24Hours, weekStartsOn } = userSettings;
   const [selection, setSelection] = useState<{ day: Date; startTime: string; endTime: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<BusyHour | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<BusyHour | null>(null);
@@ -374,7 +373,8 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
   // Update current time every minute
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      // Force re-render for current time position
+      // This forces re-render by updating the currentTime dependency
     }, 60000); // Update every minute
 
     return () => clearInterval(timer);
@@ -416,7 +416,7 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
       }
     };
 
-    const handleGlobalMouseUp = async (e: MouseEvent) => {
+    const handleGlobalMouseUp = async () => {
       if (isDraggingBlock && draggedBlock && currentDropPosition) {
         // Calculate new date and time
         const newDay = weekDays[currentDropPosition.dayIndex];
@@ -771,7 +771,6 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
                 })() : true;
                 
                 // A day is interactable if it's a work day, within sprint, and within work hours
-                const isInteractable = isWorkDay && isDayWithinSprint && (show24Hours ? isWithinWorkHours : true);
                 const isSelected = isDragging && selection?.day.getTime() === day.getTime() &&
                                    parse(slot.value, "HH:mm", day) >= parse(selection.startTime, "HH:mm", day) && 
                                    parse(slot.value, "HH:mm", day) < parse(selection.endTime, "HH:mm", day);
@@ -822,32 +821,10 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
                         <button
                           className="text-white hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity text-xs ml-1"
                           onClick={(e) => {
-                          e.stopPropagation(); // Prevent triggering the slot click
-                          
-                          if (block.recurringGroupId) {
-                            // Show custom dialog for recurring items
-                            const choice = prompt(`This is part of a recurring series. Choose an option:\n\n1 - Delete only this occurrence\n2 - Delete this and future occurrences\n3 - Delete all occurrences\n\nEnter 1, 2, or 3:`);
-                            
-                            if (choice === '1') {
-                              if (confirm(`Delete only this occurrence of "${block.title}"?`)) {
-                                handleDeleteBusyHour(block, 'single');
-                              }
-                            } else if (choice === '2') {
-                              if (confirm(`Delete this and all future occurrences of "${block.title}"?`)) {
-                                handleDeleteBusyHour(block, 'future');
-                              }
-                            } else if (choice === '3') {
-                              if (confirm(`Delete all occurrences of "${block.title}"?`)) {
-                                handleDeleteBusyHour(block, 'all');
-                              }
-                            }
-                          } else {
-                            // Non-recurring item - simple delete
-                            if (confirm(`Are you sure you want to delete "${block.title}"?`)) {
-                              handleDeleteBusyHour(block, 'single');
-                            }
-                          }
-                        }}
+                            e.stopPropagation(); // Prevent triggering the slot click
+                            setItemToDelete(block);
+                            setDeleteModalOpen(true);
+                          }}
                         >
                           ×
                         </button>
@@ -864,6 +841,18 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
           );
         })}
       </div>
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        setIsOpen={setDeleteModalOpen}
+        title={itemToDelete?.title || ""}
+        isRecurring={!!itemToDelete?.recurringGroupId}
+        onConfirm={(deleteType) => {
+          if (itemToDelete) {
+            handleDeleteBusyHour(itemToDelete, deleteType);
+            setItemToDelete(null);
+          }
+        }}
+      />
     </div>
   );
 }

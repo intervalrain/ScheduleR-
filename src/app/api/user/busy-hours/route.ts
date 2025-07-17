@@ -113,8 +113,8 @@ export async function POST(request: Request) {
     }
 
     const busyHoursToCreate = [];
-    let currentStartDate = newBusyHourStart;
-    let currentEndDate = newBusyHourEnd;
+    const currentStartDate = newBusyHourStart;
+    const currentEndDate = newBusyHourEnd;
     const repeatUntil = repeatEndDate ? new Date(repeatEndDate) : null;
     const recurringGroupId = repeatFrequency !== "none" ? `recurring_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : null;
 
