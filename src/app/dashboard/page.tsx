@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import * as React from "react";
-import { Responsive, WidthProvider } from "react-grid-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { calculateSprintHealth } from "@/lib/utils";
@@ -17,12 +16,14 @@ import {
   HeartIcon,
   UsersIcon,
   ZapIcon,
-  AlertTriangleIcon
+  AlertTriangleIcon,
+  CalendarIcon,
+  GitBranchIcon,
+  MessageSquareIcon,
+  FileTextIcon,
+  TargetIcon,
+  TrendingDownIcon
 } from "lucide-react";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 interface DashboardData {
   totalTasks: number;
@@ -58,10 +59,49 @@ interface WidgetProps {
   children: React.ReactNode;
 }
 
-const Widget: React.FC<WidgetProps> = ({ id, title, icon, children }) => (
-  <div key={id} className="w-1/4 h-1/4 max-h-svh p-0.5">
-    <Card className="h-full">
-      <CardHeader className="pb-3 drag-handle cursor-move">
+interface WidgetContainerProps {
+  id: string;
+  title: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragOver: (e: React.DragEvent, id: string) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
+  isDraggedOver: boolean;
+  isDragging: boolean;
+}
+
+const Widget: React.FC<WidgetContainerProps> = ({ 
+  id, 
+  title, 
+  icon, 
+  children, 
+  onDragStart, 
+  onDragOver, 
+  onDragLeave, 
+  onDrop, 
+  onDragEnd,
+  isDraggedOver,
+  isDragging
+}) => (
+  <div 
+    key={id} 
+    className={`h-full transition-all duration-200 ${
+      isDraggedOver ? 'scale-105 ring-2 ring-blue-400' : ''
+    } ${
+      isDragging ? 'opacity-50' : ''
+    }`}
+    draggable
+    onDragStart={(e) => onDragStart(e, id)}
+    onDragOver={(e) => onDragOver(e, id)}
+    onDragLeave={onDragLeave}
+    onDrop={(e) => onDrop(e, id)}
+    onDragEnd={onDragEnd}
+  >
+    <Card className="h-full cursor-move">
+      <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           {icon}
           {title}
@@ -83,82 +123,27 @@ export default function DashboardPage() {
     completionRate: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [enabledWidgets, setEnabledWidgets] = useState<{id: string, size: 'small' | 'medium' | 'large'}[]>([
-    { id: "completion-rate", size: "small" },
-    { id: "task-summary", size: "small" },
-    { id: "hours-summary", size: "small" },
-    { id: "sprint-health", size: "small" },
-    { id: "progress-chart", size: "small" },
-    { id: "team-workload", size: "medium" },
-    { id: "velocity", size: "small" },
-    { id: "risk-assessment", size: "small" },
-    { id: "burndown", size: "medium" },
-    { id: "recent-activity", size: "medium" }
+  const [enabledWidgets, setEnabledWidgets] = useState<{id: string}[]>([
+    { id: "completion-rate" },
+    { id: "task-summary" },
+    { id: "hours-summary" },
+    { id: "sprint-health" },
+    { id: "progress-chart" },
+    { id: "team-workload" },
+    { id: "velocity" },
+    { id: "risk-assessment" },
+    { id: "burndown" },
+    { id: "recent-activity" },
+    { id: "calendar-overview" },
+    { id: "code-commits" },
+    { id: "team-communication" },
+    { id: "project-documentation" },
+    { id: "performance-metrics" },
+    { id: "resource-usage" }
   ]);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
-  const getWidgetLayoutSize = (size: 'small' | 'medium' | 'large') => {
-    switch (size) {
-      case 'small':
-        return { w: 3, h: 2 };  // 1/4 width (3 out of 12)
-      case 'medium':
-        return { w: 6, h: 2 };  // 1/2 width (6 out of 12)
-      case 'large':
-        return { w: 12, h: 2 }; // full width (12 out of 12)
-      default:
-        return { w: 3, h: 2 };
-    }
-  };
-
-  const generateInitialLayouts = (widgets: {id: string, size: 'small' | 'medium' | 'large'}[]) => {
-    const layouts: { [key: string]: any[] } = { lg: [] };
-    let x = 0, y = 0;
-    let maxRowHeight = 0;
-    
-    widgets.forEach((widget, index) => {
-      const size = getWidgetLayoutSize(widget.size);
-      
-      // Check if widget fits in current row (max 4 cards per row = 12 units)
-      if (x + size.w > 12) {
-        x = 0;
-        y += maxRowHeight;
-        maxRowHeight = 0;
-      }
-      
-      layouts.lg.push({
-        i: widget.id,
-        x: x,
-        y: y,
-        w: size.w,
-        h: size.h
-      });
-      
-      x += size.w;
-      maxRowHeight = Math.max(maxRowHeight, size.h);
-    });
-    
-    return layouts;
-  };
-
-  const initialLayouts = generateInitialLayouts([
-    { id: "completion-rate", size: "small" },
-    { id: "task-summary", size: "small" },
-    { id: "hours-summary", size: "small" },
-    { id: "sprint-health", size: "small" },
-    { id: "progress-chart", size: "small" },
-    { id: "team-workload", size: "medium" },
-    { id: "velocity", size: "small" },
-    { id: "risk-assessment", size: "small" },
-    { id: "burndown", size: "medium" },
-    { id: "recent-activity", size: "medium" }
-  ]);
-
-  const [layouts, setLayouts] = useState(() => {
-    if (typeof window !== "undefined") {
-      const savedLayouts = localStorage.getItem("dashboardLayouts");
-      return savedLayouts ? JSON.parse(savedLayouts) : initialLayouts;
-    }
-    return initialLayouts;
-  });
   
   // Load saved widgets from localStorage
   React.useEffect(() => {
@@ -167,7 +152,7 @@ export default function DashboardPage() {
       if (savedWidgets) {
         try {
           const parsed = JSON.parse(savedWidgets);
-          if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setEnabledWidgets(parsed);
           }
         } catch (e) {
@@ -177,16 +162,10 @@ export default function DashboardPage() {
     }
   }, []);
   
-  // Update layouts when widgets change
-  React.useEffect(() => {
-    const newLayouts = generateInitialLayouts(enabledWidgets);
-    setLayouts(newLayouts);
-  }, [enabledWidgets]);
-
-  const handleWidgetToggle = (widgetId: string, enabled: boolean, size: 'small' | 'medium' | 'large' = 'small') => {
+  const handleWidgetToggle = (widgetId: string, enabled: boolean) => {
     setEnabledWidgets(prev => {
       const newWidgets = enabled 
-        ? [...prev.filter(w => w.id !== widgetId), { id: widgetId, size }]
+        ? [...prev.filter(w => w.id !== widgetId), { id: widgetId }]
         : prev.filter(w => w.id !== widgetId);
       
       if (typeof window !== "undefined") {
@@ -194,6 +173,49 @@ export default function DashboardPage() {
       }
       return newWidgets;
     });
+  };
+
+  const handleDragStart = (e: React.DragEvent, widgetId: string) => {
+    setDraggedItem(widgetId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, widgetId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverItem(widgetId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverItem(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetWidgetId: string) => {
+    e.preventDefault();
+    
+    if (draggedItem && draggedItem !== targetWidgetId) {
+      const newWidgets = [...enabledWidgets];
+      const draggedIndex = newWidgets.findIndex(w => w.id === draggedItem);
+      const targetIndex = newWidgets.findIndex(w => w.id === targetWidgetId);
+      
+      // Remove dragged item and insert at target position
+      const [draggedWidget] = newWidgets.splice(draggedIndex, 1);
+      newWidgets.splice(targetIndex, 0, draggedWidget);
+      
+      setEnabledWidgets(newWidgets);
+      
+      if (typeof window !== "undefined") {
+        localStorage.setItem("enabledWidgets", JSON.stringify(newWidgets));
+      }
+    }
+    
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverItem(null);
   };
 
   const fetchDashboardData = async () => {
@@ -278,16 +300,6 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("dashboardLayouts", JSON.stringify(layouts));
-    }
-  }, [layouts]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onLayoutChange = (layout: any, allLayouts: any) => {
-    setLayouts(allLayouts);
-  };
 
   if (loading) {
     return (
@@ -333,19 +345,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="relative min-h-[400px]">
-        <ResponsiveGridLayout
-          className="layout"
-          layouts={layouts}
-          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-          cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-          rowHeight={80}
-          onLayoutChange={onLayoutChange}
-          margin={[16, 16]}
-          isDraggable={true}
-          isResizable={false}
-          draggableHandle=".drag-handle"
-        >
+      <div className="grid grid-cols-4 gap-4 auto-rows-fr">
         {enabledWidgets.map(widget => {
           switch (widget.id) {
             case "completion-rate":
@@ -355,6 +355,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Sprint Completion Rate"
                   icon={<TrendingUpIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
                     <div className="text-3xl font-bold text-primary mb-2">
@@ -377,6 +384,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Task Summary"
                   icon={<CheckCircleIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="space-y-2">
                     <div className="flex justify-between">
@@ -402,6 +416,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Work Hours"
                   icon={<ClockIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
                     <div className="text-3xl font-bold text-primary mb-2">
@@ -421,6 +442,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Sprint Health"
                   icon={<HeartIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
                     <div className="text-3xl font-bold mb-2" style={{ 
@@ -456,6 +484,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Progress Overview"
                   icon={<BarChart3Icon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
@@ -490,6 +525,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Team Workload"
                   icon={<UsersIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="space-y-2">
                     {dashboardData.teamWorkload?.members.map((member, index) => (
@@ -520,6 +562,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Sprint Velocity"
                   icon={<ZapIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary mb-2">
@@ -558,6 +607,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Risk Assessment"
                   icon={<AlertTriangleIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
                     <div className={`text-2xl font-bold mb-2 ${
@@ -585,6 +641,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Burn Down Chart"
                   icon={<TrendingUpIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="h-32 flex items-end space-x-1">
                     {dashboardData.burndownData?.map((value, index) => (
@@ -609,6 +672,13 @@ export default function DashboardPage() {
                   id={widget.id}
                   title="Recent Activity"
                   icon={<CheckCircleIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
                 >
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
@@ -636,11 +706,204 @@ export default function DashboardPage() {
                 </Widget>
               );
               
+            case "calendar-overview":
+              return (
+                <Widget 
+                  key={widget.id}
+                  id={widget.id}
+                  title="Calendar Overview"
+                  icon={<CalendarIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span>Sprint Demo - Tomorrow</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      <span>Code Review - Today 3PM</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>Team Meeting - Friday</span>
+                    </div>
+                  </div>
+                </Widget>
+              );
+              
+            case "code-commits":
+              return (
+                <Widget 
+                  key={widget.id}
+                  id={widget.id}
+                  title="Code Commits"
+                  icon={<GitBranchIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Today</span>
+                      <span className="font-bold text-green-600">12</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>This Week</span>
+                      <span className="font-bold text-blue-600">47</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Last Commit</span>
+                      <span className="text-muted-foreground">2h ago</span>
+                    </div>
+                  </div>
+                </Widget>
+              );
+              
+            case "team-communication":
+              return (
+                <Widget 
+                  key={widget.id}
+                  id={widget.id}
+                  title="Team Communication"
+                  icon={<MessageSquareIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">A</div>
+                      <span>New bug report filed</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">B</div>
+                      <span>PR approved & merged</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs">C</div>
+                      <span>Design review complete</span>
+                    </div>
+                  </div>
+                </Widget>
+              );
+              
+            case "project-documentation":
+              return (
+                <Widget 
+                  key={widget.id}
+                  id={widget.id}
+                  title="Project Documentation"
+                  icon={<FileTextIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>API Docs</span>
+                      <span className="text-green-600">Updated</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>User Guide</span>
+                      <span className="text-yellow-600">Review</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>README</span>
+                      <span className="text-blue-600">Complete</span>
+                    </div>
+                  </div>
+                </Widget>
+              );
+              
+            case "performance-metrics":
+              return (
+                <Widget 
+                  key={widget.id}
+                  id={widget.id}
+                  title="Performance Metrics"
+                  icon={<TargetIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Response Time</span>
+                      <span className="font-bold text-green-600">145ms</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Uptime</span>
+                      <span className="font-bold text-green-600">99.9%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Error Rate</span>
+                      <span className="font-bold text-red-600">0.1%</span>
+                    </div>
+                  </div>
+                </Widget>
+              );
+              
+            case "resource-usage":
+              return (
+                <Widget 
+                  key={widget.id}
+                  id={widget.id}
+                  title="Resource Usage"
+                  icon={<TrendingDownIcon className="w-4 h-4" />}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverItem === widget.id}
+                  isDragging={draggedItem === widget.id}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>CPU</span>
+                      <span className="font-bold">24%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: '24%' }}></div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Memory</span>
+                      <span className="font-bold">67%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-yellow-500 h-1.5 rounded-full" style={{ width: '67%' }}></div>
+                    </div>
+                  </div>
+                </Widget>
+              );
+              
             default:
               return null;
           }
         })}
-        </ResponsiveGridLayout>
       </div>
     </div>
   );

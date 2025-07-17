@@ -20,10 +20,14 @@ import {
   UsersIcon,
   ZapIcon,
   AlertTriangleIcon,
-  SettingsIcon
+  SettingsIcon,
+  CalendarIcon,
+  GitBranchIcon,
+  MessageSquareIcon,
+  FileTextIcon,
+  TargetIcon,
+  TrendingDownIcon
 } from "lucide-react";
-
-type WidgetSize = 'small' | 'medium' | 'large';
 
 interface WidgetItem {
   id: string;
@@ -32,18 +36,15 @@ interface WidgetItem {
   icon: React.ReactNode;
   category: string;
   enabled: boolean;
-  availableSizes: WidgetSize[];
-  defaultSize: WidgetSize;
 }
 
 interface WidgetConfig {
   id: string;
-  size: WidgetSize;
 }
 
 interface WidgetProviderProps {
   enabledWidgets: WidgetConfig[];
-  onWidgetToggle: (widgetId: string, enabled: boolean, size?: WidgetSize) => void;
+  onWidgetToggle: (widgetId: string, enabled: boolean) => void;
 }
 
 const availableWidgets: WidgetItem[] = [
@@ -53,9 +54,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Shows the overall completion percentage of current sprint",
     icon: <TrendingUpIcon className="w-4 h-4" />,
     category: "Progress",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "task-summary",
@@ -63,9 +62,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Overview of total, completed, and in-progress tasks",
     icon: <CheckCircleIcon className="w-4 h-4" />,
     category: "Tasks",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "hours-summary",
@@ -73,9 +70,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Total estimated work hours for all tasks",
     icon: <ClockIcon className="w-4 h-4" />,
     category: "Time",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "sprint-health",
@@ -83,9 +78,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Health indicator based on completed vs consumed hours",
     icon: <HeartIcon className="w-4 h-4" />,
     category: "Health",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "progress-chart",
@@ -93,9 +86,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Visual representation of task completion progress",
     icon: <BarChart3Icon className="w-4 h-4" />,
     category: "Progress",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "team-workload",
@@ -103,9 +94,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Shows individual team member workload vs capacity",
     icon: <UsersIcon className="w-4 h-4" />,
     category: "Team",
-    enabled: true,
-    availableSizes: ['medium', 'large'],
-    defaultSize: 'medium'
+    enabled: true
   },
   {
     id: "velocity",
@@ -113,9 +102,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Current and historical sprint velocity metrics",
     icon: <ZapIcon className="w-4 h-4" />,
     category: "Metrics",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "risk-assessment",
@@ -123,9 +110,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Project risk level and contributing factors",
     icon: <AlertTriangleIcon className="w-4 h-4" />,
     category: "Risk",
-    enabled: true,
-    availableSizes: ['small', 'medium'],
-    defaultSize: 'small'
+    enabled: true
   },
   {
     id: "burndown",
@@ -133,9 +118,7 @@ const availableWidgets: WidgetItem[] = [
     description: "Shows remaining work over time",
     icon: <TrendingUpIcon className="w-4 h-4" />,
     category: "Progress",
-    enabled: true,
-    availableSizes: ['medium', 'large'],
-    defaultSize: 'medium'
+    enabled: true
   },
   {
     id: "recent-activity",
@@ -143,9 +126,55 @@ const availableWidgets: WidgetItem[] = [
     description: "Latest task updates and activities",
     icon: <CheckCircleIcon className="w-4 h-4" />,
     category: "Activity",
-    enabled: true,
-    availableSizes: ['medium', 'large'],
-    defaultSize: 'medium'
+    enabled: true
+  },
+  {
+    id: "calendar-overview",
+    title: "Calendar Overview",
+    description: "Upcoming deadlines and scheduled tasks",
+    icon: <CalendarIcon className="w-4 h-4" />,
+    category: "Planning",
+    enabled: true
+  },
+  {
+    id: "code-commits",
+    title: "Code Commits",
+    description: "Recent git commits and code changes",
+    icon: <GitBranchIcon className="w-4 h-4" />,
+    category: "Development",
+    enabled: true
+  },
+  {
+    id: "team-communication",
+    title: "Team Communication",
+    description: "Latest messages and notifications",
+    icon: <MessageSquareIcon className="w-4 h-4" />,
+    category: "Communication",
+    enabled: true
+  },
+  {
+    id: "project-documentation",
+    title: "Project Documentation",
+    description: "Important documents and resources",
+    icon: <FileTextIcon className="w-4 h-4" />,
+    category: "Documentation",
+    enabled: true
+  },
+  {
+    id: "performance-metrics",
+    title: "Performance Metrics",
+    description: "Application performance and monitoring",
+    icon: <TargetIcon className="w-4 h-4" />,
+    category: "Performance",
+    enabled: true
+  },
+  {
+    id: "resource-usage",
+    title: "Resource Usage",
+    description: "System resource consumption tracking",
+    icon: <TrendingDownIcon className="w-4 h-4" />,
+    category: "System",
+    enabled: true
   }
 ];
 
@@ -156,23 +185,9 @@ export default function WidgetProvider({ enabledWidgets, onWidgetToggle }: Widge
   
   const isEnabled = (widgetId: string) => enabledWidgets.some(w => w.id === widgetId);
   
-  const getWidgetSize = (widgetId: string) => {
-    const widget = enabledWidgets.find(w => w.id === widgetId);
-    return widget?.size || availableWidgets.find(w => w.id === widgetId)?.defaultSize || 'small';
-  };
-  
   const handleToggle = (widgetId: string) => {
     const enabled = isEnabled(widgetId);
-    if (enabled) {
-      onWidgetToggle(widgetId, false);
-    } else {
-      const widget = availableWidgets.find(w => w.id === widgetId);
-      onWidgetToggle(widgetId, true, widget?.defaultSize);
-    }
-  };
-  
-  const handleSizeChange = (widgetId: string, size: WidgetSize) => {
-    onWidgetToggle(widgetId, true, size);
+    onWidgetToggle(widgetId, !enabled);
   };
   
 
@@ -219,22 +234,7 @@ export default function WidgetProvider({ enabledWidgets, onWidgetToggle }: Widge
                               </div>
                               <div className="flex items-center gap-2">
                                 {isEnabled(widget.id) && (
-                                  <div className="flex items-center gap-1">
-                                    {widget.availableSizes.map((size) => (
-                                      <Button
-                                        key={size}
-                                        variant={getWidgetSize(widget.id) === size ? "default" : "outline"}
-                                        size="sm"
-                                        className="h-6 px-2 text-xs"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleSizeChange(widget.id, size);
-                                        }}
-                                      >
-                                        {size}
-                                      </Button>
-                                    ))}
-                                  </div>
+                                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                                 )}
                               </div>
                             </div>

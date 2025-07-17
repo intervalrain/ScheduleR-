@@ -88,14 +88,14 @@ export default function GanttPage() {
       ganttRef.current.innerHTML = '';
       
       // Convert tasks to Gantt format
-      const ganttTasks = tasks.map(task => {
+      const ganttTasks = tasks.filter(task => task && task.id && task.title).map(task => {
         const today = new Date();
         const startDate = task.startDate ? new Date(task.startDate) : today;
         const endDate = task.endDate ? new Date(task.endDate) : new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
         
         return {
           id: task.id,
-          name: task.title,
+          name: task.title || 'Untitled Task',
           start: startDate.toISOString().split('T')[0],
           end: endDate.toISOString().split('T')[0],
           progress: task.progress || 0,
@@ -105,6 +105,12 @@ export default function GanttPage() {
                       'gantt-task-pending'
         };
       });
+
+      // Only create Gantt if we have valid tasks
+      if (ganttTasks.length === 0) {
+        ganttRef.current.innerHTML = '<div class="text-center py-8 text-gray-500">No valid tasks to display</div>';
+        return;
+      }
 
       try {
         new Gantt(ganttRef.current, ganttTasks, {
