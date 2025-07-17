@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { calculateSprintHealth } from '@/lib/utils';
 
 export async function GET() {
   try {
@@ -43,6 +44,33 @@ export async function GET() {
       totalTasks - completedTasks,
     ];
 
+    // Mock data for additional widgets
+    const sprintHealth = {
+      totalHours: 80,
+      completedHours: 32,
+      consumedHours: 36,
+      healthPercentage: calculateSprintHealth(32, 36)
+    };
+
+    const teamWorkload = {
+      members: [
+        { name: "Alice", workload: 32, capacity: 40 },
+        { name: "Bob", workload: 38, capacity: 40 },
+        { name: "Charlie", workload: 28, capacity: 40 }
+      ]
+    };
+
+    const velocity = {
+      currentSprint: 24,
+      previousSprint: 20,
+      average: 22
+    };
+
+    const riskAssessment = {
+      level: 'medium' as const,
+      factors: ['Resource constraints', 'Technical debt']
+    };
+
     const summary = {
       totalTasks,
       completedTasks,
@@ -51,6 +79,10 @@ export async function GET() {
       totalHours,
       completionRate,
       burndownData,
+      sprintHealth,
+      teamWorkload,
+      velocity,
+      riskAssessment,
       timestamp: new Date().toISOString(),
     };
 
