@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useTaskRefresh } from "@/context/TaskContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Task {
   id: string;
@@ -15,56 +16,63 @@ interface Task {
 export default function Sidebar() {
   const { data: session, status } = useSession();
   const { refreshTrigger } = useTaskRefresh();
-  const [ongoingTasks, setOngoingTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string>('IN_PROGRESS');
 
   useEffect(() => {
     // Only fetch if user is authenticated
     if (status === "loading") return; // Still loading
     if (!session) {
       // Not authenticated, use mock data
-      const mockTasks: Task[] = [
+      const allMockTasks: Task[] = [
         { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
         { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
-        { id: "task3", title: "Setup CI/CD", status: "IN_PROGRESS" },
+        { id: "task3", title: "Setup CI/CD", status: "TODO" },
+        { id: "task4", title: "Write Tests", status: "REVIEW" },
+        { id: "task5", title: "Deploy to Production", status: "DONE" },
       ];
-      setOngoingTasks(mockTasks);
+      const filteredMockTasks = allMockTasks.filter(task => task.status === selectedStatus);
+      setTasks(filteredMockTasks);
       return;
     }
 
-    // Fetch ongoing tasks from API
-    const fetchOngoingTasks = async () => {
+    // Fetch tasks by status from API
+    const fetchTasksByStatus = async (status: string) => {
       try {
-        // For now, we'll fetch all tasks and filter for ongoing ones
-        // In a real implementation, you'd have a sprint context or selected sprint
-        const response = await fetch('/api/tasks?status=IN_PROGRESS');
+        const response = await fetch(`/api/tasks?status=${status}`);
         if (response.ok) {
-          const tasks = await response.json();
-          setOngoingTasks(tasks);
+          const fetchedTasks = await response.json();
+          setTasks(fetchedTasks);
         } else {
           const errorText = await response.text();
-          console.error('Failed to fetch ongoing tasks:', response.status, errorText);
+          console.error('Failed to fetch tasks:', response.status, errorText);
           // Fallback to mock data
           const mockTasks: Task[] = [
-            { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
-            { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
-            { id: "task3", title: "Setup CI/CD", status: "IN_PROGRESS" },
+            { id: "task1", title: "Implement Login", status },
+            { id: "task2", title: "Design Database", status },
+            { id: "task3", title: "Setup CI/CD", status },
           ];
-          setOngoingTasks(mockTasks);
+          setTasks(mockTasks);
         }
       } catch (error) {
-        console.error('Error fetching ongoing tasks:', error);
+        console.error('Error fetching tasks:', error);
         // Fallback to mock data
         const mockTasks: Task[] = [
-          { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
-          { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
-          { id: "task3", title: "Setup CI/CD", status: "IN_PROGRESS" },
+          { id: "task1", title: "Implement Login", status },
+          { id: "task2", title: "Design Database", status },
+          { id: "task3", title: "Setup CI/CD", status },
         ];
-        setOngoingTasks(mockTasks);
+        setTasks(mockTasks);
       }
     };
 
-    fetchOngoingTasks();
-  }, [session, status, refreshTrigger]);
+    fetchTasksByStatus(selectedStatus);
+  }, [session, status, refreshTrigger, selectedStatus]);
+
+  // Handle status change
+  const handleStatusChange = (newStatus: string) => {
+    setSelectedStatus(newStatus);
+  };
 
   const onDragEnd = async (result: {
     destination?: { droppableId: string; index: number } | null;
@@ -84,12 +92,12 @@ export default function Sidebar() {
       return;
     }
 
-    const newTasks = Array.from(ongoingTasks);
+    const newTasks = Array.from(tasks);
     const [reorderedItem] = newTasks.splice(source.index, 1);
     newTasks.splice(destination.index, 0, reorderedItem);
 
     // Optimistically update the UI
-    setOngoingTasks(newTasks);
+    setTasks(newTasks);
 
     // Update task order via API
     try {
@@ -115,15 +123,28 @@ export default function Sidebar() {
   return (
     <aside className="w-64 p-6 bg-sidebar border-r border-sidebar-border">
       <div className="mb-6">
-        <h2 className="text-sm font-medium text-sidebar-foreground uppercase tracking-wider">
-          Ongoing Tasks
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-sidebar-foreground uppercase tracking-wider">
+            Tasks
+          </h2>
+        </div>
+        <Select value={selectedStatus} onValueChange={handleStatusChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODO">📋 Pending</SelectItem>
+            <SelectItem value="IN_PROGRESS">⚡ Ongoing</SelectItem>
+            <SelectItem value="REVIEW">👀 Review</SelectItem>
+            <SelectItem value="DONE">✅ Done</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="ongoing-tasks">
+        <Droppable droppableId="sidebar-tasks">
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-              {ongoingTasks.map((task, index) => (
+              {tasks.map((task, index) => (
                 <Draggable key={task.id} draggableId={task.id} index={index}>
                   {(provided) => (
                     <Link href={`/workspace/${task.id}`}>
@@ -134,7 +155,12 @@ export default function Sidebar() {
                         className="group bg-white p-3 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-all duration-200 border border-border/40 hover:border-primary/20"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 bg-primary rounded-full opacity-60 group-hover:opacity-100 transition-opacity"></div>
+                          <div className={`w-2 h-2 rounded-full opacity-60 group-hover:opacity-100 transition-opacity ${
+                            task.status === 'DONE' ? 'bg-green-500' :
+                            task.status === 'IN_PROGRESS' ? 'bg-blue-500' :
+                            task.status === 'REVIEW' ? 'bg-yellow-500' :
+                            'bg-gray-400'
+                          }`}></div>
                           <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                             {task.title}
                           </span>
