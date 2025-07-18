@@ -899,6 +899,16 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
     });
   };
 
+  const getSprintPeriodsForDay = (day: Date) => {
+    return sprints.filter((sprint: Sprint) => {
+      const sprintStart = new Date(sprint.startDate);
+      const sprintEnd = new Date(sprint.endDate);
+      // Return sprints where day falls within the period but is NOT start or end date
+      return day >= sprintStart && day <= sprintEnd && 
+             !isSameDay(day, sprintStart) && !isSameDay(day, sprintEnd);
+    });
+  };
+
   const isWithinAnySprint = (day: Date) => {
     return sprints.some((sprint: Sprint) => {
       const sprintStart = new Date(sprint.startDate);
@@ -977,11 +987,11 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
                     "text-xs px-1 py-0.5 rounded-md text-white font-medium",
                     status.type === 'start' ? "bg-green-500" : "bg-red-500"
                   )}>
-                    {status.type === 'start' ? 'Sprint Starts' : 'Sprint Ends'}
+                    {status.type === 'start' ? `${status.sprint.name} Starts` : `${status.sprint.name} Ends`}
                   </div>
                 ))}
-                {getSprintsForDay(day).map((sprint: Sprint) => (
-                  <div key={sprint.id} className="text-xs bg-secondary text-secondary-foreground p-1 rounded-md">
+                {getSprintPeriodsForDay(day).map((sprint: Sprint) => (
+                  <div key={sprint.id} className="text-xs bg-gray-200 text-gray-700 p-1 rounded-md">
                     {sprint.name}
                   </div>
                 ))}
