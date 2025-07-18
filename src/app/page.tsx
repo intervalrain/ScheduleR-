@@ -179,7 +179,7 @@ export default function Home() {
     
     try {
       const response = await fetch(`/api/sprints/${selectedSprint.id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editForm.name,
