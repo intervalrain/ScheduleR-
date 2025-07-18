@@ -11,13 +11,15 @@ interface Task {
   id: string;
   title: string;
   status: string;
-  startDate?: string;
-  endDate?: string;
-  estimateHours?: number;
+  createdAt?: string;
+  estimatedHours?: number;
   progress?: number;
   dependsOn?: { id: string }[];
   priority?: string;
   subtasks?: { id: string; isCompleted: boolean }[];
+  // Generated fields for Gantt visualization
+  startDate?: string;
+  endDate?: string;
 }
 
 // Helper function to calculate position and width
@@ -49,27 +51,63 @@ export default function GanttPage() {
       if (response.ok) {
         const taskData = await response.json();
         
-        // Fetch subtasks for each task to calculate completion
+        // Process tasks with subtasks and generate Gantt dates
         const tasksWithSubtasks = await Promise.all(
-          taskData.map(async (task: Task) => {
+          taskData.map(async (task: Task, index: number) => {
             try {
               const subtasksResponse = await fetch(`/api/tasks/${task.id}/subtasks`);
+              let subtasks = [];
+              let calculatedProgress = 0;
+              
               if (subtasksResponse.ok) {
-                const subtasks = await subtasksResponse.json();
+                subtasks = await subtasksResponse.json();
                 const completedSubtasks = subtasks.filter((st: any) => st.isCompleted).length;
                 const totalSubtasks = subtasks.length;
-                const calculatedProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
-                
-                return {
-                  ...task,
-                  subtasks,
-                  progress: calculatedProgress
-                };
+                calculatedProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
               }
-              return { ...task, subtasks: [], progress: 0 };
+              
+              // Generate start and end dates for Gantt visualization
+              const baseDate = new Date();
+              const estimatedDays = Math.max(1, Math.ceil((task.estimatedHours || 8) / 8)); // Convert hours to days
+              
+              // Stagger tasks based on status and priority
+              let startOffset = 0;
+              if (task.status === 'DONE') {
+                startOffset = -7; // Completed tasks start a week ago
+              } else if (task.status === 'IN_PROGRESS') {
+                startOffset = -2; // In progress tasks started 2 days ago
+              } else if (task.status === 'REVIEW') {
+                startOffset = Math.floor(estimatedDays / 2); // Review tasks start mid-way
+              } else {
+                startOffset = index * 2; // TODO tasks start with 2-day intervals
+              }
+              
+              const startDate = new Date(baseDate.getTime() + startOffset * 24 * 60 * 60 * 1000);
+              const endDate = new Date(startDate.getTime() + estimatedDays * 24 * 60 * 60 * 1000);
+              
+              return {
+                ...task,
+                subtasks,
+                progress: calculatedProgress,
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0]
+              };
             } catch (error) {
               console.error(`Error fetching subtasks for task ${task.id}:`, error);
-              return { ...task, subtasks: [], progress: 0 };
+              
+              // Fallback date generation
+              const baseDate = new Date();
+              const estimatedDays = Math.max(1, Math.ceil((task.estimatedHours || 8) / 8));
+              const startDate = new Date(baseDate.getTime() + index * 2 * 24 * 60 * 60 * 1000);
+              const endDate = new Date(startDate.getTime() + estimatedDays * 24 * 60 * 60 * 1000);
+              
+              return { 
+                ...task, 
+                subtasks: [], 
+                progress: 0,
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0]
+              };
             }
           })
         );
@@ -93,7 +131,7 @@ export default function GanttPage() {
           startDate: formatDate(today),
           endDate: formatDate(new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)),
           progress: 50,
-          estimateHours: 40,
+          estimatedHours: 40,
           priority: "500000"
         },
         {
@@ -103,7 +141,7 @@ export default function GanttPage() {
           startDate: formatDate(new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)),
           endDate: formatDate(new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000)),
           progress: 30,
-          estimateHours: 60,
+          estimatedHours: 60,
           priority: "600000"
         },
         {
@@ -113,7 +151,7 @@ export default function GanttPage() {
           startDate: formatDate(new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000)),
           endDate: formatDate(new Date(today.getTime() + 25 * 24 * 60 * 60 * 1000)),
           progress: 0,
-          estimateHours: 20,
+          estimatedHours: 20,
           priority: "700000"
         },
         {
@@ -123,7 +161,7 @@ export default function GanttPage() {
           startDate: formatDate(new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000)),
           endDate: formatDate(new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)),
           progress: 0,
-          estimateHours: 25,
+          estimatedHours: 25,
           priority: "800000"
         },
         {
@@ -133,7 +171,7 @@ export default function GanttPage() {
           startDate: formatDate(new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000)),
           endDate: formatDate(new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000)),
           progress: 100,
-          estimateHours: 15,
+          estimatedHours: 15,
           priority: "400000"
         },
       ]);
@@ -176,10 +214,13 @@ export default function GanttPage() {
         headers.push(current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
         current.setDate(current.getDate() + 1);
       } else if (viewMode === 'Week') {
-        headers.push(`Week ${Math.ceil(current.getDate() / 7)}`);
+        const weekStart = new Date(current);
+        const weekEnd = new Date(current);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        headers.push(`${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
         current.setDate(current.getDate() + 7);
       } else { // Month
-        headers.push(current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+        headers.push(current.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
         current.setMonth(current.getMonth() + 1);
       }
     }
@@ -230,6 +271,58 @@ export default function GanttPage() {
 
   return (
     <div className="space-y-6">
+      {/* Task Summary */}
+      {tasks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Task Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                <div className="text-2xl font-bold text-primary">{tasks.length}</div>
+                <div className="text-sm text-muted-foreground">Total Tasks</div>
+              </div>
+              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">
+                  {tasks.filter(t => t.status === 'DONE').length}
+                </div>
+                <div className="text-sm text-muted-foreground">Completed</div>
+              </div>
+              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">
+                  {tasks.filter(t => t.status === 'IN_PROGRESS').length}
+                </div>
+                <div className="text-sm text-muted-foreground">In Progress</div>
+              </div>
+              <div className="text-center p-4 bg-muted/30 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">
+                  {tasks.reduce((sum, task) => sum + (task.estimatedHours || 0), 0)}h
+                </div>
+                <div className="text-sm text-muted-foreground">Total Hours</div>
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Overall Progress</span>
+                <span className="text-sm text-muted-foreground">
+                  {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'DONE').reduce((sum, t) => sum + (t.estimatedHours || 0), 0) / tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)) * 100) : 0}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-primary h-2 rounded-full transition-all duration-300" 
+                  style={{ 
+                    width: `${tasks.length > 0 ? (tasks.filter(t => t.status === 'DONE').length / tasks.length) * 100 : 0}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -276,12 +369,18 @@ export default function GanttPage() {
                   <div className="w-64 p-3 border-r bg-gray-50 font-semibold">
                     Task Name
                   </div>
-                  <div className="flex-1 grid grid-cols-12 min-w-[800px]">
-                    {timeHeaders.map((header, index) => (
-                      <div key={index} className="p-2 text-center text-sm font-medium border-r bg-gray-50">
-                        {header}
-                      </div>
-                    ))}
+                  <div className="flex-1 relative min-w-[800px] bg-gray-50">
+                    <div className="flex h-12 items-center">
+                      {timeHeaders.map((header, index) => (
+                        <div 
+                          key={index} 
+                          className="flex-1 text-center text-xs font-medium border-r px-1"
+                          style={{ minWidth: `${800 / timeHeaders.length}px` }}
+                        >
+                          {header}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 
@@ -301,30 +400,55 @@ export default function GanttPage() {
                     return (
                       <div key={task.id} className={`flex border-b ${taskIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                         <div className="w-64 p-3 border-r">
-                          <div className="font-medium text-sm truncate">{task.title}</div>
+                          <div className="font-medium text-sm truncate" title={task.title}>
+                            {task.title}
+                          </div>
                           <div className="text-xs text-gray-500 mt-1">
-                            {task.progress}% complete
+                            {task.progress || 0}% complete • {task.estimatedHours || 0}h
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </div>
                         </div>
-                        <div className="flex-1 relative min-w-[800px] h-12">
+                        <div className="flex-1 relative min-w-[800px] h-16">
+                          {/* Background grid lines */}
+                          {timeHeaders.map((_, index) => (
+                            <div 
+                              key={index}
+                              className="absolute top-0 bottom-0 border-r border-gray-100"
+                              style={{ left: `${(index / timeHeaders.length) * 100}%` }}
+                            />
+                          ))}
+                          
+                          {/* Task bar */}
                           <div 
-                            className={`absolute top-2 h-8 ${statusColor} rounded flex items-center justify-center text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity`}
+                            className={`absolute top-4 h-8 ${statusColor} rounded shadow-sm flex items-center text-white text-xs font-medium cursor-pointer hover:shadow-md transition-all`}
                             style={{
                               left: `${position.left}px`,
-                              width: `${position.width}px`
+                              width: `${Math.max(position.width, 60)}px`
                             }}
                             onClick={() => window.location.href = `/workspace/${task.id}`}
-                            title={`${task.title} (${task.progress}%)`}
+                            title={`${task.title}\nStart: ${startDate.toLocaleDateString()}\nEnd: ${endDate.toLocaleDateString()}\nProgress: ${task.progress || 0}%`}
                           >
-                            {task.progress > 0 && (
+                            {/* Progress overlay */}
+                            {(task.progress || 0) > 0 && (
                               <div 
-                                className="absolute left-0 top-0 h-full bg-green-600 rounded-l"
-                                style={{ width: `${task.progress}%` }}
+                                className="absolute left-0 top-0 h-full bg-green-600 rounded-l opacity-80"
+                                style={{ width: `${task.progress || 0}%` }}
                               />
                             )}
-                            <span className="relative z-10 px-2 truncate">
-                              {task.title}
+                            
+                            {/* Task text */}
+                            <span className="relative z-10 px-2 truncate flex-1">
+                              {position.width > 100 ? task.title : task.title.substring(0, 8) + '...'}
                             </span>
+                            
+                            {/* Progress percentage */}
+                            {position.width > 60 && (
+                              <span className="relative z-10 px-2 text-xs">
+                                {task.progress || 0}%
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -336,58 +460,6 @@ export default function GanttPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Task Summary */}
-      {tasks.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Task Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-primary">{tasks.length}</div>
-                <div className="text-sm text-muted-foreground">Total Tasks</div>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {tasks.filter(t => t.status === 'Done').length}
-                </div>
-                <div className="text-sm text-muted-foreground">Completed</div>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {tasks.filter(t => t.status === 'Ongoing').length}
-                </div>
-                <div className="text-sm text-muted-foreground">In Progress</div>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">
-                  {tasks.reduce((sum, task) => sum + (task.estimateHours || 0), 0)}h
-                </div>
-                <div className="text-sm text-muted-foreground">Total Hours</div>
-              </div>
-            </div>
-            
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Overall Progress</span>
-                <span className="text-sm text-muted-foreground">
-                  {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'Done').length / tasks.length) * 100) : 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-300" 
-                  style={{ 
-                    width: `${tasks.length > 0 ? (tasks.filter(t => t.status === 'Done').length / tasks.length) * 100 : 0}%` 
-                  }}
-                ></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

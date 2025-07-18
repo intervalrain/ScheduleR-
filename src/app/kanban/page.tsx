@@ -365,16 +365,16 @@ export default function KanbanPage() {
                                         Progress ({task.subtasks.filter(st => st.isCompleted).length}/{task.subtasks.length})
                                       </span>
                                       <span className="text-xs font-medium">
-                                        {task.completionPercentage}%
+                                        {task.completionPercentage || 0}%
                                       </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                                       <div 
                                         className={`h-1.5 rounded-full transition-all duration-300 ${
-                                          task.completionPercentage === 100 ? 'bg-green-500' : 
-                                          task.completionPercentage >= 50 ? 'bg-blue-500' : 'bg-yellow-500'
+                                          (task.completionPercentage || 0) === 100 ? 'bg-green-500' : 
+                                          (task.completionPercentage || 0) >= 50 ? 'bg-blue-500' : 'bg-yellow-500'
                                         }`}
-                                        style={{ width: `${task.completionPercentage}%` }}
+                                        style={{ width: `${task.completionPercentage || 0}%` }}
                                       ></div>
                                     </div>
                                   </div>
