@@ -37,7 +37,7 @@ interface UserSettings {
   };
   workDays: number[]; // 0 = Sunday, 1 = Monday, ...
   show24Hours: boolean;
-  weekStartsOn: 0 | 1; // 0 = Sunday, 1 = Monday
+  weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 1 = Monday, 2 = Tuesday, etc.
 }
 
 interface Sprint {
@@ -192,6 +192,11 @@ export default function CalendarPage() {
     }
   };
 
+  const handleDayClick = (date: Date) => {
+    setCurrentDate(date);
+    setView('week');
+  };
+
   // Render Logic
   return (
     <div className="p-6 h-full flex flex-col">
@@ -239,6 +244,7 @@ export default function CalendarPage() {
           userSettings={userSettings} 
           busyHours={busyHours} 
           sprints={sprints} 
+          onDayClick={handleDayClick}
         />
       )}
     </div>
@@ -864,9 +870,10 @@ interface MonthViewProps {
   userSettings: UserSettings;
   busyHours: BusyHour[];
   sprints: Sprint[];
+  onDayClick: (date: Date) => void;
 }
 
-function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewProps) {
+function MonthView({ currentDate, userSettings, busyHours, sprints, onDayClick }: MonthViewProps) {
   const { weekStartsOn } = userSettings;
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -947,9 +954,11 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
     return `hsl(${h}, ${s}%, ${l}%`;
   };
 
-  const dayHeaders = weekStartsOn === 0 
-    ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const allDayHeaders = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayHeaders = [
+    ...allDayHeaders.slice(weekStartsOn),
+    ...allDayHeaders.slice(0, weekStartsOn)
+  ];
 
   return (
     <div className="flex-grow grid grid-cols-7 grid-rows-6 border-t border-l">
@@ -964,10 +973,11 @@ function MonthView({ currentDate, userSettings, busyHours, sprints }: MonthViewP
           <div 
             key={day.toString()} 
             className={cn(
-              "border-b border-r p-2 flex flex-col",
+              "border-b border-r p-2 flex flex-col cursor-pointer hover:bg-muted/30 hover:border-2 hover:border-primary transition-colors",
               !isSameMonth(day, currentDate) && "text-muted-foreground bg-muted/20",
               isWeekend(day) && "bg-muted/50"
             )}
+            onClick={() => onDayClick(day)}
           >
             <span className={cn("font-medium", isSameDay(day, new Date()) && "font-extrabold text-xl text-primary")}>
               {format(day, "d")}

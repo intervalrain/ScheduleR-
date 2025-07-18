@@ -22,13 +22,13 @@ interface RegularHourSettingsModalProps {
     workHours: { start: string; end: string };
     workDays: number[];
     show24Hours: boolean;
-    weekStartsOn: 0 | 1;
+    weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   };
   onSave: (settings: {
     workHours?: { start: string; end: string };
     workDays?: number[];
     show24Hours?: boolean;
-    weekStartsOn?: 0 | 1;
+    weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   }) => void;
 }
 
@@ -51,13 +51,13 @@ export function RegularHourSettingsModal({
   const [workHours, setWorkHours] = useState(userSettings.workHours);
   const [workDays, setWorkDays] = useState(userSettings.workDays);
   const [show24Hours, setShow24Hours] = useState(userSettings.show24Hours || false);
-  const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(userSettings.weekStartsOn || 1);
+  const [weekStartsOn, setWeekStartsOn] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6>(userSettings.weekStartsOn ?? 1);
 
   useEffect(() => {
     setWorkHours(userSettings.workHours);
     setWorkDays(userSettings.workDays);
     setShow24Hours(userSettings.show24Hours || false);
-    setWeekStartsOn(userSettings.weekStartsOn || 1);
+    setWeekStartsOn(userSettings.weekStartsOn ?? 1);
   }, [userSettings]);
 
   const handleWorkDayChange = (dayId: number) => {
@@ -136,14 +136,19 @@ export function RegularHourSettingsModal({
             <Label htmlFor="week-start">Week Start</Label>
             <Select
               value={weekStartsOn.toString()}
-              onValueChange={(value) => setWeekStartsOn(parseInt(value) as 0 | 1)}
+              onValueChange={(value) => setWeekStartsOn(parseInt(value) as 0 | 1 | 2 | 3 | 4 | 5 | 6)}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">Start with Monday</SelectItem>
                 <SelectItem value="0">Start with Sunday</SelectItem>
+                <SelectItem value="1">Start with Monday</SelectItem>
+                <SelectItem value="2">Start with Tuesday</SelectItem>
+                <SelectItem value="3">Start with Wednesday</SelectItem>
+                <SelectItem value="4">Start with Thursday</SelectItem>
+                <SelectItem value="5">Start with Friday</SelectItem>
+                <SelectItem value="6">Start with Saturday</SelectItem>
               </SelectContent>
             </Select>
           </div>
