@@ -372,6 +372,8 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
   const isWithinSprint = (day: Date) => {
     if (!currentSprint) return false;
     const sprintStart = new Date(currentSprint.startDate);
+
+    sprintStart.setDate(sprintStart.getDate() - 1);
     const sprintEnd = new Date(currentSprint.endDate);
     return day >= sprintStart && day <= sprintEnd;
   };
