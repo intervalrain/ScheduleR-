@@ -52,20 +52,29 @@ export default function Header() {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
   const [sprintsLoading, setSprintsLoading] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [isClient, setIsClient] = useState(false);
   const { openNewTaskDialog } = useNewTaskDialog();
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
 
+  // Initialize client-side only
+  useEffect(() => {
+    setIsClient(true);
+    setCurrentTime(new Date());
+  }, []);
+
   // Update current time every second
   useEffect(() => {
+    if (!isClient) return;
+    
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isClient]);
 
   // Fetch sprints when user is authenticated
   useEffect(() => {
@@ -207,20 +216,20 @@ export default function Header() {
         {/* Center section - Current Time */}
         <div className="flex flex-col items-center justify-center">
           <div className="text-4xl font-semibold text-foreground tabular-nums">
-            {currentTime.toLocaleTimeString('zh-TW', { 
+            {isClient && currentTime ? currentTime.toLocaleTimeString('zh-TW', { 
               hour12: false,
               hour: '2-digit',
               minute: '2-digit',
               second: '2-digit'
-            })}
+            }) : '--:--:--'}
           </div>
           <div className="text-sm text-muted-foreground">
-            {currentTime.toLocaleDateString('zh-TW', { 
+            {isClient && currentTime ? currentTime.toLocaleDateString('zh-TW', { 
               year: 'numeric',
               month: '2-digit', 
               day: '2-digit',
               weekday: 'short'
-            })}
+            }) : 'Loading...'}
           </div>
         </div>
         

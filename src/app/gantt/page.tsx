@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon, RefreshCwIcon } from "lucide-react";
 import { useTaskRefresh } from "@/context/TaskContext";
+import { Chart } from "react-google-charts";
+import { addDays, differenceInDays, format } from "date-fns";
 
 interface Task {
   id: string;
@@ -17,22 +19,23 @@ interface Task {
   dependsOn?: { id: string }[];
   priority?: string;
   subtasks?: { id: string; isCompleted: boolean }[];
-  // Generated fields for Gantt visualization
   startDate?: string;
   endDate?: string;
 }
 
-// Helper function to calculate position and width
-const getTaskPosition = (startDate: Date, endDate: Date, chartStartDate: Date, chartEndDate: Date, chartWidth: number) => {
-  const totalDays = Math.ceil((chartEndDate.getTime() - chartStartDate.getTime()) / (1000 * 60 * 60 * 24));
-  const startDays = Math.ceil((startDate.getTime() - chartStartDate.getTime()) / (1000 * 60 * 60 * 24));
-  const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  
-  const left = (startDays / totalDays) * chartWidth;
-  const width = (duration / totalDays) * chartWidth;
-  
-  return { left: Math.max(0, left), width: Math.max(10, width) };
-};
+interface Subtask {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+  taskId: string;
+}
+
+interface Sprint {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+}
 
 export default function GanttPage() {
   const { refreshTrigger } = useTaskRefresh();
@@ -40,73 +43,83 @@ export default function GanttPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<string>('Month');
+  const [currentSprint, setCurrentSprint] = useState<Sprint | null>(null);
+  const [userSettings, setUserSettings] = useState<{
+    workHours: { start: string; end: string };
+    workDays: number[];
+  }>({ workHours: { start: '09:00', end: '17:00' }, workDays: [1, 2, 3, 4, 5] });
+
+  const fetchSprint = async () => {
+    try {
+      const response = await fetch('/api/sprints');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.length > 0) {
+          // Find current active sprint or use the first one
+          const now = new Date();
+          const activeSprint = data.find((sprint: Sprint) => {
+            const start = new Date(sprint.startDate);
+            const end = new Date(sprint.endDate);
+            return now >= start && now <= end;
+          });
+          setCurrentSprint(activeSprint || data[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching sprint:', error);
+    }
+  };
+
+  const fetchUserSettings = async () => {
+    try {
+      const response = await fetch('/api/user/profile');
+      if (response.ok) {
+        const data = await response.json();
+        const settings = data.settings || {};
+        setUserSettings({
+          workHours: settings.workHours || { start: '09:00', end: '17:00' },
+          workDays: settings.workDays || [1, 2, 3, 4, 5]
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching user settings:', error);
+    }
+  };
 
   const fetchTasks = async () => {
     setLoading(true);
     setError(null);
     try {
-      // For now, fetch all tasks with any status
-      // In a real app, you might want to filter by sprint
       const response = await fetch('/api/tasks');
       if (response.ok) {
-        const taskData = await response.json();
+        const data = await response.json();
         
-        // Process tasks with subtasks and generate Gantt dates
+        // Fetch subtasks for each task
         const tasksWithSubtasks = await Promise.all(
-          taskData.map(async (task: Task, index: number) => {
+          data.map(async (task: Task) => {
             try {
               const subtasksResponse = await fetch(`/api/tasks/${task.id}/subtasks`);
-              let subtasks = [];
-              let calculatedProgress = 0;
+              const subtasksData = subtasksResponse.ok ? await subtasksResponse.json() : [];
               
-              if (subtasksResponse.ok) {
-                subtasks = await subtasksResponse.json();
-                const completedSubtasks = subtasks.filter((st: any) => st.isCompleted).length;
-                const totalSubtasks = subtasks.length;
-                calculatedProgress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
-              }
+              const completedSubtasks = subtasksData.filter((st: Subtask) => st.isCompleted).length;
+              const totalSubtasks = subtasksData.length;
               
-              // Generate start and end dates for Gantt visualization
-              const baseDate = new Date();
-              const estimatedDays = Math.max(1, Math.ceil((task.estimatedHours || 8) / 8)); // Convert hours to days
+              // Calculate progress based on subtasks
+              const progress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
               
-              // Stagger tasks based on status and priority
-              let startOffset = 0;
-              if (task.status === 'DONE') {
-                startOffset = -7; // Completed tasks start a week ago
-              } else if (task.status === 'IN_PROGRESS') {
-                startOffset = -2; // In progress tasks started 2 days ago
-              } else if (task.status === 'REVIEW') {
-                startOffset = Math.floor(estimatedDays / 2); // Review tasks start mid-way
-              } else {
-                startOffset = index * 2; // TODO tasks start with 2-day intervals
-              }
-              
-              const startDate = new Date(baseDate.getTime() + startOffset * 24 * 60 * 60 * 1000);
-              const endDate = new Date(startDate.getTime() + estimatedDays * 24 * 60 * 60 * 1000);
-              
-              return {
-                ...task,
-                subtasks,
-                progress: calculatedProgress,
-                startDate: startDate.toISOString().split('T')[0],
-                endDate: endDate.toISOString().split('T')[0]
+              return { 
+                ...task, 
+                subtasks: subtasksData, 
+                progress,
+                estimatedHours: task.estimatedHours || 8
               };
             } catch (error) {
               console.error(`Error fetching subtasks for task ${task.id}:`, error);
-              
-              // Fallback date generation
-              const baseDate = new Date();
-              const estimatedDays = Math.max(1, Math.ceil((task.estimatedHours || 8) / 8));
-              const startDate = new Date(baseDate.getTime() + index * 2 * 24 * 60 * 60 * 1000);
-              const endDate = new Date(startDate.getTime() + estimatedDays * 24 * 60 * 60 * 1000);
-              
               return { 
                 ...task, 
                 subtasks: [], 
                 progress: 0,
-                startDate: startDate.toISOString().split('T')[0],
-                endDate: endDate.toISOString().split('T')[0]
+                estimatedHours: task.estimatedHours || 8
               };
             }
           })
@@ -120,59 +133,46 @@ export default function GanttPage() {
       console.error('Error fetching tasks:', error);
       setError('Failed to load tasks');
       // Fallback to mock data with current dates
-      const today = new Date();
-      const formatDate = (date: Date) => date.toISOString().split('T')[0];
-      
       setTasks([
         {
           id: "task1",
           title: "Redesign website",
-          status: "IN_PROGRESS",
-          startDate: formatDate(today),
-          endDate: formatDate(new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)),
-          progress: 50,
+          status: "DONE",
+          progress: 100,
           estimatedHours: 40,
           priority: "500000"
         },
         {
           id: "task2", 
           title: "Develop backend API",
-          status: "IN_PROGRESS",
-          startDate: formatDate(new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)),
-          endDate: formatDate(new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000)),
+          status: "REVIEW",
           progress: 30,
           estimatedHours: 60,
-          priority: "600000"
+          priority: "400000"
         },
         {
           id: "task3",
           title: "Deploy to production", 
-          status: "TODO",
-          startDate: formatDate(new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000)),
-          endDate: formatDate(new Date(today.getTime() + 25 * 24 * 60 * 60 * 1000)),
+          status: "IN_PROGRESS",
           progress: 0,
           estimatedHours: 20,
-          priority: "700000"
+          priority: "300000"
         },
         {
           id: "task4",
           title: "Testing & QA",
           status: "TODO",
-          startDate: formatDate(new Date(today.getTime() + 20 * 24 * 60 * 60 * 1000)),
-          endDate: formatDate(new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)),
           progress: 0,
           estimatedHours: 25,
-          priority: "800000"
+          priority: "200000"
         },
         {
           id: "task5",
           title: "User Documentation",
-          status: "DONE",
-          startDate: formatDate(new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000)),
-          endDate: formatDate(new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000)),
-          progress: 100,
+          status: "TODO",
+          progress: 0,
           estimatedHours: 15,
-          priority: "400000"
+          priority: "100000"
         },
       ]);
     } finally {
@@ -181,87 +181,460 @@ export default function GanttPage() {
   };
 
   useEffect(() => {
+    fetchSprint();
     fetchTasks();
+    fetchUserSettings();
   }, [refreshTrigger]);
+  
+  // Refresh chart when view mode changes
+  useEffect(() => {
+    if (currentSprint && tasks.length > 0) {
+      // Force chart re-render by updating a state or key
+      console.log(`View mode changed to: ${viewMode}`);
+    }
+  }, [viewMode, currentSprint, tasks]);
 
-  // Calculate chart date range
-  const getChartDateRange = () => {
-    if (tasks.length === 0) return { start: new Date(), end: new Date() };
+  // Calculate task scheduling using double pointer approach
+  const calculateTaskSchedule = () => {
+    if (!currentSprint) return [];
     
-    const dates = tasks.flatMap(task => [
-      task.startDate ? new Date(task.startDate) : new Date(),
-      task.endDate ? new Date(task.endDate) : new Date()
-    ]);
+    const sprintStartDate = new Date(currentSprint.startDate);
+    const sprintEndDate = new Date(currentSprint.endDate);
     
-    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-    
-    // Add some padding
-    const paddingDays = 7;
-    minDate.setDate(minDate.getDate() - paddingDays);
-    maxDate.setDate(maxDate.getDate() + paddingDays);
-    
-    return { start: minDate, end: maxDate };
-  };
-
-  // Generate time headers based on view mode
-  const generateTimeHeaders = (startDate: Date, endDate: Date) => {
-    const headers: string[] = [];
-    const current = new Date(startDate);
-    
-    while (current <= endDate) {
-      if (viewMode === 'Day') {
-        headers.push(current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        current.setDate(current.getDate() + 1);
-      } else if (viewMode === 'Week') {
-        const weekStart = new Date(current);
-        const weekEnd = new Date(current);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        headers.push(`${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
-        current.setDate(current.getDate() + 7);
-      } else { // Month
-        headers.push(current.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
-        current.setMonth(current.getMonth() + 1);
+    // Sort tasks by status priority (DONE > REVIEW > IN_PROGRESS > TODO) then by priority (high to low)
+    const sortedTasks = [...tasks].sort((a, b) => {
+      const statusOrder = { 'DONE': 1, 'REVIEW': 2, 'IN_PROGRESS': 3, 'TODO': 4 };
+      const aOrder = statusOrder[a.status as keyof typeof statusOrder] || 5;
+      const bOrder = statusOrder[b.status as keyof typeof statusOrder] || 5;
+      
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
       }
+      
+      // If same status, sort by priority (lower number = higher priority)
+      return parseInt(a.priority || '999999') - parseInt(b.priority || '999999');
+    });
+
+    // Helper functions
+    const parseTimeToMinutes = (timeStr: string): number => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const isWorkDay = (date: Date): boolean => {
+      const dayOfWeek = date.getDay();
+      return userSettings.workDays.includes(dayOfWeek);
+    };
+
+    // Create work hour blocks for the entire sprint
+    interface WorkBlock {
+      date: Date;
+      startMinutes: number;
+      endMinutes: number;
+      availableHours: number;
+    }
+
+    const generateWorkBlocks = (): WorkBlock[] => {
+      const workBlocks: WorkBlock[] = [];
+      let currentDate = new Date(sprintStartDate);
+      
+      const workStartMinutes = parseTimeToMinutes(userSettings.workHours.start);
+      const workEndMinutes = parseTimeToMinutes(userSettings.workHours.end);
+      const hoursPerDay = (workEndMinutes - workStartMinutes) / 60;
+      
+      while (currentDate <= sprintEndDate) {
+        if (isWorkDay(currentDate)) {
+          workBlocks.push({
+            date: new Date(currentDate),
+            startMinutes: workStartMinutes,
+            endMinutes: workEndMinutes,
+            availableHours: hoursPerDay
+          });
+        }
+        currentDate = addDays(currentDate, 1);
+      }
+      return workBlocks;
+    };
+
+    const workBlocks = generateWorkBlocks();
+    
+    // Debug logging
+    console.log('Work blocks generated:', workBlocks.map(b => ({
+      date: format(b.date, 'yyyy-MM-dd'),
+      start: `${Math.floor(b.startMinutes / 60)}:${String(b.startMinutes % 60).padStart(2, '0')}`,
+      end: `${Math.floor(b.endMinutes / 60)}:${String(b.endMinutes % 60).padStart(2, '0')}`,
+      hours: b.availableHours
+    })));
+
+    const scheduledTasks = [];
+
+    // Double pointer approach
+    let taskPointer = 0;      // Points to current task
+    let workBlockPointer = 0; // Points to current work block
+    let currentBlockHoursUsed = 0; // Hours already used in current block
+
+    while (taskPointer < sortedTasks.length && workBlockPointer < workBlocks.length) {
+      const currentTask = sortedTasks[taskPointer];
+      const needHours = currentTask.estimatedHours || 8;
+      
+      console.log(`\n=== Processing Task ${taskPointer + 1}: ${currentTask.title} (${needHours}h) ===`);
+      console.log(`Starting at block ${workBlockPointer}, hours used: ${currentBlockHoursUsed}`);
+      
+      // Find task start position
+      const taskStartBlock = workBlockPointer;
+      const taskStartDate = workBlocks[taskStartBlock].date;
+      const taskStartMinutes = workBlocks[taskStartBlock].startMinutes + (currentBlockHoursUsed * 60);
+      
+      // Set task start time
+      const taskStartDateTime = new Date(taskStartDate);
+      taskStartDateTime.setHours(Math.floor(taskStartMinutes / 60), taskStartMinutes % 60, 0, 0);
+      
+      console.log(`Task starts at: ${format(taskStartDateTime, 'yyyy-MM-dd HH:mm')}`);
+      
+      let remainingHours = needHours;
+      let tempWorkBlockPointer = workBlockPointer;
+      let tempBlockHoursUsed = currentBlockHoursUsed;
+      
+      // Find where task ends by consuming work hours
+      while (remainingHours > 0 && tempWorkBlockPointer < workBlocks.length) {
+        const currentBlock = workBlocks[tempWorkBlockPointer];
+        const availableHoursInBlock = currentBlock.availableHours - tempBlockHoursUsed;
+        
+        console.log(`Block ${tempWorkBlockPointer}: Available ${availableHoursInBlock}h, Need ${remainingHours}h`);
+        
+        if (availableHoursInBlock > 0) {
+          const hoursToConsume = Math.min(remainingHours, availableHoursInBlock);
+          tempBlockHoursUsed += hoursToConsume;
+          remainingHours -= hoursToConsume;
+          
+          console.log(`Consuming ${hoursToConsume}h, remaining ${remainingHours}h`);
+          
+          // If block is full, move to next block
+          if (tempBlockHoursUsed >= currentBlock.availableHours) {
+            console.log(`Block ${tempWorkBlockPointer} full, moving to next block`);
+            tempWorkBlockPointer++;
+            tempBlockHoursUsed = 0;
+          }
+        } else {
+          // Current block is full, move to next block
+          console.log(`Block ${tempWorkBlockPointer} has no available hours, moving to next block`);
+          tempWorkBlockPointer++;
+          tempBlockHoursUsed = 0;
+        }
+      }
+      
+      // Calculate task end time
+      let taskEndDateTime: Date;
+      if (remainingHours <= 0) {
+        // Task completed successfully
+        if (tempBlockHoursUsed > 0 && tempWorkBlockPointer < workBlocks.length) {
+          // Task ends within current block
+          const endBlock = workBlocks[tempWorkBlockPointer];
+          const endMinutes = endBlock.startMinutes + (tempBlockHoursUsed * 60);
+          taskEndDateTime = new Date(endBlock.date);
+          taskEndDateTime.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+        } else if (tempWorkBlockPointer > 0) {
+          // Task ended exactly at the end of previous block
+          const lastBlock = workBlocks[tempWorkBlockPointer - 1];
+          taskEndDateTime = new Date(lastBlock.date);
+          taskEndDateTime.setHours(Math.floor(lastBlock.endMinutes / 60), lastBlock.endMinutes % 60, 0, 0);
+        } else {
+          taskEndDateTime = new Date(taskStartDateTime);
+        }
+      } else {
+        // Task extends beyond available work blocks
+        if (tempWorkBlockPointer > 0) {
+          const lastBlock = workBlocks[tempWorkBlockPointer - 1];
+          taskEndDateTime = new Date(lastBlock.date);
+          taskEndDateTime.setHours(Math.floor(lastBlock.endMinutes / 60), lastBlock.endMinutes % 60, 0, 0);
+        } else {
+          taskEndDateTime = new Date(taskStartDateTime);
+        }
+      }
+      
+      console.log(`Task ends at: ${format(taskEndDateTime, 'yyyy-MM-dd HH:mm')}`);
+      
+      scheduledTasks.push({
+        ...currentTask,
+        startDate: taskStartDateTime,
+        endDate: taskEndDateTime,
+        estimatedDays: Math.ceil(needHours / 8)
+      });
+      
+      // Update pointers for next task - handle off hour boundary
+      if (remainingHours <= 0) {
+        // Task completed successfully
+        if (tempBlockHoursUsed > 0 && tempWorkBlockPointer < workBlocks.length) {
+          // Task ends within current block, continue from current position
+          workBlockPointer = tempWorkBlockPointer;
+          currentBlockHoursUsed = tempBlockHoursUsed;
+        } else {
+          // Task ended exactly at block boundary, move to next block
+          workBlockPointer = tempWorkBlockPointer;
+          currentBlockHoursUsed = 0;
+        }
+      } else {
+        // Task couldn't be completed, move to next available block
+        workBlockPointer = tempWorkBlockPointer;
+        currentBlockHoursUsed = 0;
+      }
+      
+      console.log(`Next task will start at block ${workBlockPointer}, hours used: ${currentBlockHoursUsed}`);
+      
+      taskPointer++;
     }
     
-    return headers;
+    return scheduledTasks;
   };
 
-  // Sort tasks by status and priority
-  const sortedTasks = [...tasks].sort((a, b) => {
-    const statusPriority = { 'DONE': 1, 'IN_PROGRESS': 2, 'REVIEW': 3, 'TODO': 4 };
-    const aStatusPriority = statusPriority[a.status as keyof typeof statusPriority] || 5;
-    const bStatusPriority = statusPriority[b.status as keyof typeof statusPriority] || 5;
+  const scheduledTasks = calculateTaskSchedule();
+
+  // Get chart date range based on view mode
+  const getChartDateRange = () => {
+    if (!currentSprint) return { start: new Date(), end: new Date() };
     
-    if (aStatusPriority !== bStatusPriority) {
-      return aStatusPriority - bStatusPriority;
+    const sprintStart = new Date(currentSprint.startDate);
+    const sprintEnd = new Date(currentSprint.endDate);
+    
+    // Always show the full sprint range
+    return { start: sprintStart, end: sprintEnd };
+  };
+
+  // Prepare data for Google Charts Gantt
+  const getGanttData = () => {
+    const columns = [
+      { type: 'string', label: 'Task ID' },
+      { type: 'string', label: 'Task Name' },
+      { type: 'string', label: 'Resource' },
+      { type: 'date', label: 'Start Date' },
+      { type: 'date', label: 'End Date' },
+      { type: 'number', label: 'Duration' },
+      { type: 'number', label: 'Percent Complete' },
+      { type: 'string', label: 'Dependencies' },
+    ];
+
+    const rows = scheduledTasks.map((task) => {
+      const startDate = task.startDate;
+      const endDate = task.endDate;
+      const duration = endDate.getTime() - startDate.getTime();
+      const percentComplete = task.status === 'DONE' || task.status === 'REVIES' 
+        ? 100
+        : task.status === 'TODO'
+        ? 0
+        : (!task.subtasks || task.subtasks.length === 0) 
+        ? 0
+        : Math.round((task.subtasks.filter(t => t.isCompleted).length / task.subtasks.length) * 100);
+      
+      // Status as resource for color coding
+      const resource = task.status || 'TODO';
+      
+      // Dependencies (if any)
+      const dependencies = task.dependsOn?.map(dep => dep.id).join(',') || null;
+
+      return [
+        task.id,
+        task.title,
+        resource,
+        startDate,
+        endDate,
+        duration,
+        percentComplete,
+        dependencies
+      ];
+    });
+
+    // Add sprint end marker in Full view
+    if (currentSprint) {
+      const sprintEndDate = new Date(currentSprint.endDate);
+      // Set end time to 23:59:59 of the sprint end date
+      sprintEndDate.setHours(23, 59, 59, 999);
+      
+      // Start just 1 minute before sprint end
+      const sprintEndStartDate = new Date(sprintEndDate.getTime() - 60000); // 1 minute before
+      
+      rows.push([
+        'sprint-end',
+        '🏁 Sprint End',
+        'MILESTONE',
+        sprintEndStartDate,
+        sprintEndDate,
+        60000, // 1 minute duration
+        100,
+        null
+      ]);
     }
-    
-    const aPriority = parseInt(a.priority || '1000000');
-    const bPriority = parseInt(b.priority || '1000000');
-    return aPriority - bPriority;
-  });
+
+    return [columns, ...rows];
+  };
 
   const chartDateRange = getChartDateRange();
-  const timeHeaders = generateTimeHeaders(chartDateRange.start, chartDateRange.end);
+  
+  // Calculate proper chart width based on time range and view mode
+  const getChartWidth = () => {
+    const daysDiff = differenceInDays(chartDateRange.end, chartDateRange.start);
+    switch (viewMode) {
+      case 'Day':
+        const totalHours = daysDiff * 24; // Total hours in sprint
+        return Math.max(1200, totalHours * 40); // 40px per hour grid
+      case 'Week':
+        return Math.max(1200, Math.ceil(daysDiff / 7) * 120); // 120px per week grid
+      case 'Month':
+        return Math.max(1200, Math.ceil(daysDiff / 30) * 150); // 150px per month grid
+      case 'Full':
+        return '100%'; // Fill the entire card width
+      default:
+        return Math.max(1200, Math.ceil(daysDiff / 30) * 150);
+    }
+  };
+  
+  const chartWidth = getChartWidth();
+  
+  const ganttOptions = {
+    height: Math.max(400, scheduledTasks.length * 50 + 100),
+    // width is handled by Chart component props only
+    gantt: {
+      trackHeight: 30,
+      criticalPathEnabled: false,
+      innerGridHorizLine: {
+        stroke: '#e0e0e0',
+        strokeWidth: 1
+      },
+      innerGridTrack: { fill: '#fafafa' },
+      innerGridDarkTrack: { fill: '#f5f5f5' },
+      labelStyle: {
+        fontName: 'Arial',
+        fontSize: 12,
+        color: '#333'
+      },
+      percentEnabled: true,
+      sortTasks: false,
+      defaultStartDate: chartDateRange.start,
+      arrow: {
+        angle: 100,
+        length: 8,
+        spaceAfter: 4
+      }
+    },
+    backgroundColor: '#fff',
+    explorer: {
+      actions: ['dragToZoom', 'rightClickToReset'],
+      axis: 'horizontal',
+      keepInBounds: true,
+      maxZoomIn: 8.0,
+      maxZoomOut: 0.1
+    },
+    hAxis: {
+      format: getTimeAxisFormat(),
+      minValue: chartDateRange.start,
+      maxValue: chartDateRange.end,
+      gridlines: {
+        color: '#e0e0e0',
+        count: getGridlineCount()
+      },
+      minorGridlines: {
+        color: '#f0f0f0',
+        count: getMinorGridlineCount()
+      },
+      textStyle: {
+        fontSize: 10,
+        color: '#666'
+      }
+    }
+  };
+  
+  function getTimeAxisFormat() {
+    const daysDiff = differenceInDays(chartDateRange.end, chartDateRange.start);
+    switch (viewMode) {
+      case 'Day':
+        return 'MMM dd'; // Show date and hour
+      case 'Week':
+        return 'MMM dd'; // Show week start date
+      case 'Month':
+        return 'MMM yyyy'; // Show month and year
+      case 'Full':
+        // Adaptive format based on sprint length
+        if (daysDiff <= 14) {
+          return 'MMM dd'; // Daily format for short sprints
+        } else if (daysDiff <= 60) {
+          return 'MMM dd'; // Weekly format for medium sprints
+        } else {
+          return 'MMM yyyy'; // Monthly format for long sprints
+        }
+      default:
+        return 'MMM yyyy';
+    }
+  }
+  
+  function getGridlineCount() {
+    const daysDiff = differenceInDays(chartDateRange.end, chartDateRange.start);
+    switch (viewMode) {
+      case 'Day':
+        const totalHours = daysDiff * 24;
+        return Math.ceil(totalHours / 8); // Major grid every 8 hours
+      case 'Week':
+        return Math.ceil(daysDiff / 14); // Major grid every 14 days (2 weeks)
+      case 'Month':
+        return Math.ceil(daysDiff / 60); // Major grid every 2 months (60 days)
+      case 'Full':
+        return Math.min(10, Math.ceil(daysDiff / 7)); // Adaptive gridlines, max 10
+      default:
+        return Math.ceil(daysDiff / 60);
+    }
+  }
+  
+  function getMinorGridlineCount() {
+    switch (viewMode) {
+      case 'Day':
+        return 7; // 7 minor gridlines per major grid (1 hour between 8-hour major grids)
+      case 'Week':
+        return 1; // 1 minor gridline per major grid (7 days between 14-day major grids)
+      case 'Month':
+        return 1; // 1 minor gridline per major grid (1 month between 2-month major grids)
+      case 'Full':
+        return 2; // 2 minor gridlines per major grid
+      default:
+        return 1;
+    }
+  }
 
   if (loading) {
     return (
       <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CalendarIcon className="w-6 h-6" />
+            Gantt Chart
+          </h1>
+        </div>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5" />
-              Gantt Chart
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading tasks...</p>
-              </div>
+          <CardContent className="p-6">
+            <div className="animate-pulse">
+              <div className="h-4 bg-gray-200 rounded mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded"></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CalendarIcon className="w-6 h-6" />
+            Gantt Chart
+          </h1>
+          <Button onClick={fetchTasks} variant="outline" size="sm">
+            <RefreshCwIcon className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center text-red-600">
+              <p>{error}</p>
             </div>
           </CardContent>
         </Card>
@@ -270,196 +643,103 @@ export default function GanttPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Task Summary */}
-      {tasks.length > 0 && (
+    <div className="space-y-6 w-full max-w-full">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <CalendarIcon className="w-6 h-6" />
+          Gantt Chart
+        </h1>
+        <div className="flex items-center gap-2">
+          <Select value={viewMode} onValueChange={setViewMode}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Day">Day</SelectItem>
+              <SelectItem value="Week">Week</SelectItem>
+              <SelectItem value="Month">Month</SelectItem>
+              <SelectItem value="Full">Full</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={fetchTasks} variant="outline" size="sm">
+            <RefreshCwIcon className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Sprint Information */}
+      {currentSprint && (
         <Card>
           <CardHeader>
-            <CardTitle>Task Summary</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5" />
+              Current Sprint: {currentSprint.name}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-primary">{tasks.length}</div>
-                <div className="text-sm text-muted-foreground">Total Tasks</div>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {tasks.filter(t => t.status === 'DONE').length}
-                </div>
-                <div className="text-sm text-muted-foreground">Completed</div>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {tasks.filter(t => t.status === 'IN_PROGRESS').length}
-                </div>
-                <div className="text-sm text-muted-foreground">In Progress</div>
-              </div>
-              <div className="text-center p-4 bg-muted/30 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">
-                  {tasks.reduce((sum, task) => sum + (task.estimatedHours || 0), 0)}h
-                </div>
-                <div className="text-sm text-muted-foreground">Total Hours</div>
-              </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span>Start: {format(new Date(currentSprint.startDate), 'MMM dd, yyyy')}</span>
+              <span>End: {format(new Date(currentSprint.endDate), 'MMM dd, yyyy')}</span>
+              <span>Duration: {differenceInDays(new Date(currentSprint.endDate), new Date(currentSprint.startDate)) + 1} days</span>
             </div>
-            
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Overall Progress</span>
-                <span className="text-sm text-muted-foreground">
-                  {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'DONE').reduce((sum, t) => sum + (t.estimatedHours || 0), 0) / tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)) * 100) : 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-300" 
-                  style={{ 
-                    width: `${tasks.length > 0 ? (tasks.filter(t => t.status === 'DONE').length / tasks.length) * 100 : 0}%` 
-                  }}
-                ></div>
-              </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              <span className="font-medium">View Range:</span> {format(chartDateRange.start, 'MMM dd, yyyy')} - {format(chartDateRange.end, 'MMM dd, yyyy')} 
+              <span className="ml-2">({differenceInDays(chartDateRange.end, chartDateRange.start) + 1} days)</span>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      <div className="w-full" style={{ maxWidth: 'calc(100vw - 20rem)' }}>
+        <Card className="w-full overflow-hidden">
+          <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarIcon className="w-5 h-5" />
-              Gantt Chart
+              Project Timeline
             </CardTitle>
-            <div className="flex items-center gap-2">
-              <Select value={viewMode} onValueChange={setViewMode}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="View" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Day">Day</SelectItem>
-                  <SelectItem value="Week">Week</SelectItem>
-                  <SelectItem value="Month">Month</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={fetchTasks} variant="outline" size="sm">
-                <RefreshCwIcon className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-red-700">{error}</p>
-            </div>
-          )}
-          
-          {tasks.length === 0 ? (
-            <div className="text-center py-12">
-              <CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No tasks found</h3>
-              <p className="text-muted-foreground">Create some tasks to see them in the Gantt chart.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <div className="min-w-full">
-                {/* Gantt Chart Header */}
-                <div className="flex border-b">
-                  <div className="w-64 p-3 border-r bg-gray-50 font-semibold">
-                    Task Name
+          </CardHeader>
+          <CardContent className="p-0">
+            {scheduledTasks.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground px-6">
+                {!currentSprint ? 'No active sprint found' : 'No tasks available for Gantt chart'}
+              </div>
+            ) : (
+              <div className="w-full">
+                <div 
+                  className="overflow-x-auto overflow-y-hidden border-t border-gray-200"
+                  style={{ 
+                    maxHeight: '600px',
+                    width: '100%'
+                  }}
+                >
+                  <div style={{ 
+                    width: viewMode === 'Full' ? '100%' : `${chartWidth}px`, 
+                    minWidth: viewMode === 'Full' ? '100%' : '800px' 
+                  }}>
+                    <Chart
+                      key={`gantt-${viewMode}-${currentSprint?.id || 'no-sprint'}-${tasks.length}`}
+                      chartType="Gantt"
+                      width={viewMode === 'Full' ? '100%' : chartWidth}
+                      height={ganttOptions.height}
+                      data={getGanttData()}
+                      options={ganttOptions}
+                      loader={
+                        <div className="flex items-center justify-center h-96">
+                          <div className="text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                            <p className="text-muted-foreground">Loading Gantt Chart...</p>
+                          </div>
+                        </div>
+                      }
+                    />
                   </div>
-                  <div className="flex-1 relative min-w-[800px] bg-gray-50">
-                    <div className="flex h-12 items-center">
-                      {timeHeaders.map((header, index) => (
-                        <div 
-                          key={index} 
-                          className="flex-1 text-center text-xs font-medium border-r px-1"
-                          style={{ minWidth: `${800 / timeHeaders.length}px` }}
-                        >
-                          {header}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Gantt Chart Body */}
-                <div className="min-h-[400px]">
-                  {sortedTasks.map((task, taskIndex) => {
-                    const startDate = task.startDate ? new Date(task.startDate) : new Date();
-                    const endDate = task.endDate ? new Date(task.endDate) : new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
-                    const position = getTaskPosition(startDate, endDate, chartDateRange.start, chartDateRange.end, 800);
-                    
-                    const statusColor = 
-                      task.status === 'DONE' ? 'bg-green-500' :
-                      task.status === 'IN_PROGRESS' ? 'bg-blue-500' :
-                      task.status === 'REVIEW' ? 'bg-yellow-500' :
-                      'bg-gray-400';
-                    
-                    return (
-                      <div key={task.id} className={`flex border-b ${taskIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <div className="w-64 p-3 border-r">
-                          <div className="font-medium text-sm truncate" title={task.title}>
-                            {task.title}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {task.progress || 0}% complete • {task.estimatedHours || 0}h
-                          </div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </div>
-                        </div>
-                        <div className="flex-1 relative min-w-[800px] h-16">
-                          {/* Background grid lines */}
-                          {timeHeaders.map((_, index) => (
-                            <div 
-                              key={index}
-                              className="absolute top-0 bottom-0 border-r border-gray-100"
-                              style={{ left: `${(index / timeHeaders.length) * 100}%` }}
-                            />
-                          ))}
-                          
-                          {/* Task bar */}
-                          <div 
-                            className={`absolute top-4 h-8 ${statusColor} rounded shadow-sm flex items-center text-white text-xs font-medium cursor-pointer hover:shadow-md transition-all`}
-                            style={{
-                              left: `${position.left}px`,
-                              width: `${Math.max(position.width, 60)}px`
-                            }}
-                            onClick={() => window.location.href = `/workspace/${task.id}`}
-                            title={`${task.title}\nStart: ${startDate.toLocaleDateString()}\nEnd: ${endDate.toLocaleDateString()}\nProgress: ${task.progress || 0}%`}
-                          >
-                            {/* Progress overlay */}
-                            {(task.progress || 0) > 0 && (
-                              <div 
-                                className="absolute left-0 top-0 h-full bg-green-600 rounded-l opacity-80"
-                                style={{ width: `${task.progress || 0}%` }}
-                              />
-                            )}
-                            
-                            {/* Task text */}
-                            <span className="relative z-10 px-2 truncate flex-1">
-                              {position.width > 100 ? task.title : task.title.substring(0, 8) + '...'}
-                            </span>
-                            
-                            {/* Progress percentage */}
-                            {position.width > 60 && (
-                              <span className="relative z-10 px-2 text-xs">
-                                {task.progress || 0}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
