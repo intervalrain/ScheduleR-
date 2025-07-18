@@ -52,10 +52,20 @@ export default function Header() {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
   const [sprintsLoading, setSprintsLoading] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const { openNewTaskDialog } = useNewTaskDialog();
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
+
+  // Update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch sprints when user is authenticated
   useEffect(() => {
@@ -148,7 +158,8 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-border/60 backdrop-blur-sm">
       {/* Top section with brand and actions */}
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="grid grid-cols-3 items-center px-6 py-4">
+        {/* Left section */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold text-foreground">ScheduleR</h1>
@@ -192,7 +203,29 @@ export default function Header() {
           </Select>
           <NewSprintDialog onSprintCreated={refreshSprints} />
         </div>
-        <div className="flex items-center gap-3">
+        
+        {/* Center section - Current Time */}
+        <div className="flex flex-col items-center justify-center">
+          <div className="text-4xl font-semibold text-foreground tabular-nums">
+            {currentTime.toLocaleTimeString('zh-TW', { 
+              hour12: false,
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            })}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {currentTime.toLocaleDateString('zh-TW', { 
+              year: 'numeric',
+              month: '2-digit', 
+              day: '2-digit',
+              weekday: 'short'
+            })}
+          </div>
+        </div>
+        
+        {/* Right section */}
+        <div className="flex items-center gap-3 justify-end">
           {session && (
             <Button 
               onClick={() => openNewTaskDialog(selectedSprintId || undefined)} 

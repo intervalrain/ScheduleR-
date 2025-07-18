@@ -94,7 +94,7 @@ export default function Home() {
     if (isAutoScrolling && maxPages > 1) {
       scrollIntervalRef.current = setInterval(() => {
         setCurrentWidgetIndex(prev => (prev + 1) % maxPages);
-      }, 3000);
+      }, 5000);
     } else if (scrollIntervalRef.current) {
       clearInterval(scrollIntervalRef.current);
       scrollIntervalRef.current = null;

@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       return sprints.some(sprint => {
         const sprintStart = new Date(sprint.startDate);
         const sprintEnd = new Date(sprint.endDate);
+        sprintEnd.setHours(23, 59, 59, 999);
         return date >= sprintStart && date <= sprintEnd;
       });
     };
