@@ -144,9 +144,9 @@ export default function Sidebar() {
             <SelectValue placeholder="Select status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="TODO">📋 Pending</SelectItem>
-            <SelectItem value="IN_PROGRESS">⚡ Ongoing</SelectItem>
-            <SelectItem value="REVIEW">👀 Review</SelectItem>
+            <SelectItem value="TODO">📋 To Do</SelectItem>
+            <SelectItem value="IN_PROGRESS">⚡ In Progress</SelectItem>
+            <SelectItem value="REVIEW">👀 Reviewing</SelectItem>
             <SelectItem value="DONE">✅ Done</SelectItem>
           </SelectContent>
         </Select>
