@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useTaskRefresh } from "@/context/TaskContext";
 import { useSprint } from "@/context/SprintContext";
 import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData";
+import { sortByPriorityDescending, calculateDragPriority, needsRebalancing, rebalancePriorities, INITIAL_PRIORITY } from "@/lib/priorityUtils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -171,62 +172,25 @@ export default function KanbanPage() {
       to: { status: destStatus, index: destination.index }
     });
     
-    // Get tasks in the destination column, sorted by priority (excluding the dragged task)
-    const destTasks = tasks
-      .filter(task => task.status === destStatus && task.id !== draggableId)
-      .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000));
+    // Get tasks in the destination column, sorted by priority in descending order
+    const destTasks = sortByPriorityDescending(
+      tasks.filter(task => task.status === destStatus && task.id !== draggableId)
+    );
     
     console.log('Destination tasks:', destTasks.map(t => ({ id: t.id, title: t.title, priority: t.priority })));
 
-    let newPriority: number;
-    let targetIndex = destination.index;
+    // Calculate priorities for all tasks in destination column
+    const destPriorities = destTasks.map(t => t.priority ?? INITIAL_PRIORITY);
     
-    // Adjust index if we're moving within the same column
-    if (sourceStatus === destStatus) {
-      const draggedTaskIndex = tasks
-        .filter(task => task.status === destStatus)
-        .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000))
-        .findIndex(task => task.id === draggableId);
-      
-      if (draggedTaskIndex !== -1 && draggedTaskIndex < destination.index) {
-        targetIndex = destination.index - 1;
-      }
-    }
+    // Find source index for priority calculation
+    const sourceIndex = tasks
+      .filter(task => task.status === sourceStatus)
+      .findIndex(task => task.id === draggableId);
     
-    console.log('Target index adjusted to:', targetIndex);
+    // Calculate new priority using sparse sorting algorithm
+    const newPriority = calculateDragPriority(destPriorities, sourceIndex, destination.index);
     
-    if (destTasks.length === 0) {
-      // First task in empty column
-      newPriority = 1000000;
-      console.log('Empty column, using default priority:', newPriority);
-    } else if (targetIndex === 0) {
-      // Moving to top of column
-      const firstTaskPriority = destTasks[0].priority || 1000000;
-      newPriority = Math.max(100000, firstTaskPriority - 100000);
-      console.log('Moving to top, new priority:', newPriority, 'first task priority:', firstTaskPriority);
-    } else if (targetIndex >= destTasks.length) {
-      // Moving to bottom of column
-      const lastTaskPriority = destTasks[destTasks.length - 1].priority || 1000000;
-      newPriority = lastTaskPriority + 100000;
-      console.log('Moving to bottom, new priority:', newPriority, 'last task priority:', lastTaskPriority);
-    } else {
-      // Moving between two tasks
-      const prevTaskPriority = destTasks[targetIndex - 1].priority || 1000000;
-      const nextTaskPriority = destTasks[targetIndex].priority || 1000000;
-      newPriority = Math.floor((prevTaskPriority + nextTaskPriority) / 2);
-      
-      console.log('Moving between tasks:', {
-        prevPriority: prevTaskPriority,
-        nextPriority: nextTaskPriority,
-        calculatedPriority: newPriority
-      });
-      
-      // Ensure we don't get the same priority as existing tasks
-      if (newPriority === prevTaskPriority || newPriority === nextTaskPriority) {
-        newPriority = prevTaskPriority + Math.floor((nextTaskPriority - prevTaskPriority) / 3);
-        console.log('Adjusted priority to avoid conflict:', newPriority);
-      }
-    }
+    console.log('Calculated new priority:', newPriority, 'for position:', destination.index);
 
     // Update task locally
     const newTasks = tasks.map(task => 
@@ -259,6 +223,16 @@ export default function KanbanPage() {
       } else {
         const result = await response.json();
         console.log('Task updated successfully:', result);
+        
+        // Check if we need to rebalance priorities in this column
+        const columnTasks = newTasks.filter(t => t.status === destStatus);
+        const priorities = sortByPriorityDescending(columnTasks).map(t => t.priority ?? INITIAL_PRIORITY);
+        
+        if (needsRebalancing(priorities)) {
+          console.log('Priority collision detected in column', destStatus, ', triggering rebalance');
+          await rebalanceColumnTasks(destStatus, columnTasks);
+        }
+        
         // Trigger refresh for sidebar and other components
         triggerRefresh();
       }
@@ -270,9 +244,9 @@ export default function KanbanPage() {
   };
 
   const getTasksByStatus = (status: string) => {
-    return filteredTasks
-      .filter((task) => task.status === status)
-      .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000));
+    const statusTasks = filteredTasks.filter((task) => task.status === status);
+    // Use descending order for display (higher priority value = higher position)
+    return sortByPriorityDescending(statusTasks);
   };
 
   const getPriorityColor = (priority?: number) => {
@@ -302,6 +276,43 @@ export default function KanbanPage() {
     console.log('Task deleted, refreshing task list');
     triggerRefresh();
     fetchTasks();
+  };
+
+  // Function to rebalance all tasks in a column when priorities collide
+  const rebalanceColumnTasks = async (status: string, columnTasks: Task[]) => {
+    const sortedTasks = sortByPriorityDescending(columnTasks);
+    const newPriorities = rebalancePriorities(sortedTasks.length);
+    
+    // Update all tasks with new priorities
+    const rebalancedTasks = sortedTasks.map((task, index) => ({
+      ...task,
+      priority: newPriorities[index]
+    }));
+    
+    // Update local state
+    setTasks(prevTasks => {
+      const otherTasks = prevTasks.filter(t => t.status !== status);
+      return [...otherTasks, ...rebalancedTasks];
+    });
+    
+    // Update all tasks in the backend
+    try {
+      const updatePromises = rebalancedTasks.map(task =>
+        fetch(`/api/tasks/${task.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priority: task.priority }),
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      console.log('Successfully rebalanced priorities for column:', status);
+      triggerRefresh();
+    } catch (error) {
+      console.error('Error rebalancing tasks:', error);
+      // Refresh to get correct state from server
+      fetchTasks();
+    }
   };
 
   // Remove early return for !session to allow demo mode

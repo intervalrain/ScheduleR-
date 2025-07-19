@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format, differenceInDays, isPast, eachDayOfInterval, isWeekend } from "date-fns";
 import { useSession } from "next-auth/react";
 import { getMockTasksBySprintId, mockBusyHours } from "@/lib/mockData";
+import { sortByPriorityDescending } from "@/lib/priorityUtils";
 import { useSprint } from "@/context/SprintContext";
 import { EditSprintDialog } from "@/components/EditSprintDialog";
 import { WidgetSelector } from "@/components/WidgetSelector";

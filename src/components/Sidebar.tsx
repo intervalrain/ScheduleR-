@@ -8,6 +8,7 @@ import { useTaskRefresh } from "@/context/TaskContext";
 import { useSprint } from "@/context/SprintContext";
 import { useSidebar } from "@/context/SidebarContext";
 import { getMockTasksByStatus } from "@/lib/mockData";
+import { sortByPriorityDescending, calculateDragPriority, needsRebalancing, rebalancePriorities, INITIAL_PRIORITY } from "@/lib/priorityUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,6 +18,7 @@ interface Task {
   id: string;
   title: string;
   status: string;
+  priority?: number;
 }
 
 export default function Sidebar() {
@@ -73,7 +75,9 @@ export default function Sidebar() {
         if (response.ok) {
           const fetchedTasks = await response.json();
           console.log('Sidebar: Fetched tasks:', fetchedTasks.length);
-          setTasks(fetchedTasks);
+          // Sort tasks by priority in descending order
+          const sortedTasks = sortByPriorityDescending(fetchedTasks);
+          setTasks(sortedTasks);
         } else {
           const errorText = await response.text();
           console.error('Failed to fetch tasks:', response.status, errorText);
@@ -110,7 +114,7 @@ export default function Sidebar() {
     source: { droppableId: string; index: number };
     draggableId: string;
   }) => {
-    const { destination, source } = result;
+    const { destination, source, draggableId } = result;
 
     if (!destination) {
       return;
@@ -123,31 +127,79 @@ export default function Sidebar() {
       return;
     }
 
-    const newTasks = Array.from(tasks);
-    const [reorderedItem] = newTasks.splice(source.index, 1);
-    newTasks.splice(destination.index, 0, reorderedItem);
+    // Find the task being dragged
+    const draggedTask = tasks.find(t => t.id === draggableId);
+    if (!draggedTask) return;
 
-    // Optimistically update the UI
-    setTasks(newTasks);
+    // Get current priorities
+    const priorities = tasks.map(t => t.priority ?? INITIAL_PRIORITY);
+    
+    // Calculate new priority based on destination
+    const newPriority = calculateDragPriority(priorities, source.index, destination.index);
+    
+    // Update the dragged task with new priority
+    const updatedTask = { ...draggedTask, priority: newPriority };
+    
+    // Create new array with updated task
+    const newTasks = tasks.filter(t => t.id !== draggableId);
+    newTasks.splice(destination.index, 0, updatedTask);
+    
+    // Sort by priority to ensure correct order
+    const sortedTasks = sortByPriorityDescending(newTasks);
+    setTasks(sortedTasks);
 
-    // Update task order via API
+    // Update task priority via API
     try {
-      const response = await fetch("/api/tasks/reorder", {
+      const response = await fetch(`/api/tasks/${draggableId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskIds: newTasks.map(task => task.id) }),
+        body: JSON.stringify({ priority: newPriority }),
       });
 
       if (!response.ok) {
-        console.error('Failed to reorder tasks');
-        // Revert the optimistic update on failure
-        // In a real app, you might want to show a toast notification
-        window.location.reload(); // Simple revert for now
+        console.error('Failed to update task priority');
+        window.location.reload();
+      } else {
+        // Check if we need to rebalance
+        const newPriorities = sortedTasks.map(t => t.priority ?? INITIAL_PRIORITY);
+        if (needsRebalancing(newPriorities)) {
+          console.log('Priority collision detected, triggering rebalance');
+          await rebalanceAllTasks(sortedTasks);
+        }
       }
     } catch (error) {
-      console.error('Error reordering tasks:', error);
-      // Revert the optimistic update on failure
-      window.location.reload(); // Simple revert for now
+      console.error('Error updating task priority:', error);
+      window.location.reload();
+    }
+  };
+
+  // Function to rebalance all tasks when priorities collide
+  const rebalanceAllTasks = async (tasksToRebalance: Task[]) => {
+    const newPriorities = rebalancePriorities(tasksToRebalance.length);
+    
+    // Update all tasks with new priorities
+    const rebalancedTasks = tasksToRebalance.map((task, index) => ({
+      ...task,
+      priority: newPriorities[index]
+    }));
+    
+    setTasks(rebalancedTasks);
+    
+    // Update all tasks in the backend
+    try {
+      const updatePromises = rebalancedTasks.map(task =>
+        fetch(`/api/tasks/${task.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priority: task.priority }),
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      console.log('Successfully rebalanced all task priorities');
+    } catch (error) {
+      console.error('Error rebalancing tasks:', error);
+      window.location.reload();
     }
   };
 
