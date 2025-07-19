@@ -166,7 +166,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const { id } = await params;
-  const { title, description, status, priority, estimatedHours, tags } = await request.json();
+  const { title, description, status, priority, estimatedHours, tags, assigneeId } = await request.json();
 
   try {
     const user = await prisma.user.findUnique({
@@ -200,6 +200,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(priority !== undefined && { priority }),
         ...(estimatedHours !== undefined && { estimatedHours }),
         ...(tags !== undefined && { tags }),
+        ...(assigneeId !== undefined && { assigneeId }),
         updatedAt: new Date(),
       },
       include: {

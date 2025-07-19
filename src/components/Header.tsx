@@ -46,6 +46,9 @@ interface Sprint {
   name: string;
   startDate: string;
   endDate: string;
+  type: 'PROJECT' | 'CASUAL';
+  defaultWorkDays: number[];
+  defaultWorkHours: { start: string; end: string };
 }
 
 export default function Header() {
@@ -194,7 +197,12 @@ export default function Header() {
                     value={sprint.id} 
                     className="flex-1 border-0 p-0 focus:bg-transparent data-[highlighted]:bg-transparent"
                   >
-                    {sprint.name}
+                    <div className="flex flex-col">
+                      <span className="font-medium">{sprint.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {sprint.type === 'PROJECT' ? 'Project Management' : 'Casual Management'}
+                      </span>
+                    </div>
                   </SelectItem>
                   <button
                     className="h-6 w-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground rounded"

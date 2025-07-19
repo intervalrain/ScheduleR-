@@ -55,11 +55,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { name, startDate, endDate } = await request.json();
+  const { name, startDate, endDate, type, defaultWorkDays, defaultWorkHours } = await request.json();
 
   if (!name || !startDate || !endDate) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+
+  // Validate sprint type
+  if (type && !['PROJECT', 'CASUAL'].includes(type)) {
+    return NextResponse.json({ error: 'Invalid sprint type' }, { status: 400 });
+  }
+
+  // Set default work configuration based on type
+  const sprintType = type || 'PROJECT';
+  const workDays = defaultWorkDays || (sprintType === 'PROJECT' ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6, 7]);
+  const workHours = defaultWorkHours || (sprintType === 'PROJECT' 
+    ? { start: '08:30', end: '17:30' } 
+    : { start: '00:00', end: '23:59' });
 
   try {
     const user = await prisma.user.findUnique({
@@ -99,6 +111,9 @@ export async function POST(request: Request) {
         name,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
+        type: sprintType,
+        defaultWorkDays: workDays,
+        defaultWorkHours: workHours,
         teamId: team.id,
       },
     });

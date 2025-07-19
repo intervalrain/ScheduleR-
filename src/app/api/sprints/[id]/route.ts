@@ -149,11 +149,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
+    // Validate sprint type if provided
+    if (updateData.type && !['PROJECT', 'CASUAL'].includes(updateData.type)) {
+      return NextResponse.json({ error: 'Invalid sprint type' }, { status: 400 });
+    }
+
     // Prepare data for update, handling date conversions if necessary
-    const dataToUpdate: Record<string, any> = {};
+    const dataToUpdate: Record<string, string | Date | number[] | { start: string; end: string }> = {};
     if (updateData.name) dataToUpdate.name = updateData.name;
     if (updateData.startDate) dataToUpdate.startDate = new Date(updateData.startDate);
     if (updateData.endDate) dataToUpdate.endDate = new Date(updateData.endDate);
+    if (updateData.type) dataToUpdate.type = updateData.type;
+    if (updateData.defaultWorkDays) dataToUpdate.defaultWorkDays = updateData.defaultWorkDays;
+    if (updateData.defaultWorkHours) dataToUpdate.defaultWorkHours = updateData.defaultWorkHours;
     // You might also allow updating teamId, but be careful with permissions
 
     const updatedSprint = await prisma.sprint.update({

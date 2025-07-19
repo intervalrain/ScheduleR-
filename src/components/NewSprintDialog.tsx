@@ -14,6 +14,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSession } from "next-auth/react";
 
 interface NewSprintDialogProps {
@@ -27,7 +35,27 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
+  const [sprintType, setSprintType] = useState<'PROJECT' | 'CASUAL'>('PROJECT');
+  const [customWorkDays, setCustomWorkDays] = useState<number[]>([]);
+  const [customWorkHours, setCustomWorkHours] = useState({ start: '', end: '' });
   const [error, setError] = useState<string | null>(null);
+
+  // Default work configurations based on sprint type
+  const getDefaultWorkConfig = (type: 'PROJECT' | 'CASUAL') => {
+    if (type === 'PROJECT') {
+      return {
+        workDays: [1, 2, 3, 4, 5], // Mon-Fri
+        workHours: { start: '08:30', end: '17:30' }
+      };
+    } else {
+      return {
+        workDays: [1, 2, 3, 4, 5, 6, 7], // All days
+        workHours: { start: '00:00', end: '23:59' }
+      };
+    }
+  };
+
+  const currentWorkConfig = getDefaultWorkConfig(sprintType);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,10 +79,16 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
     setError(null);
     
     try {
+      const workDays = customWorkDays.length > 0 ? customWorkDays : currentWorkConfig.workDays;
+      const workHours = (customWorkHours.start && customWorkHours.end) ? customWorkHours : currentWorkConfig.workHours;
+      
       console.log('Creating sprint:', {
         name: name.trim(),
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
+        type: sprintType,
+        defaultWorkDays: workDays,
+        defaultWorkHours: workHours,
       });
       
       const response = await fetch('/api/sprints', {
@@ -66,6 +100,9 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
           name: name.trim(),
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
+          type: sprintType,
+          defaultWorkDays: workDays,
+          defaultWorkHours: workHours,
         }),
       });
       
@@ -81,6 +118,9 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
       setName("");
       setStartDate(undefined);
       setEndDate(undefined);
+      setSprintType('PROJECT');
+      setCustomWorkDays([]);
+      setCustomWorkHours({ start: '', end: '' });
       setOpen(false);
       
       // Trigger callback to refresh sprints
@@ -148,6 +188,40 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
                   placeholder="Select end date"
                 />
               </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="sprintType">Sprint Type</Label>
+                <Select value={sprintType} onValueChange={(value: 'PROJECT' | 'CASUAL') => setSprintType(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select sprint type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PROJECT">Project Management</SelectItem>
+                    <SelectItem value="CASUAL">Casual Management</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Work Schedule Preview</CardTitle>
+                  <CardDescription className="text-xs">
+                    Default schedule for {sprintType === 'PROJECT' ? 'project management' : 'casual management'} sprints
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-sm">
+                    <span className="font-medium">Work Days:</span>{' '}
+                    {sprintType === 'PROJECT' ? 'Monday - Friday' : 'All Days (Monday - Sunday)'}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">Work Hours:</span>{' '}
+                    {sprintType === 'PROJECT' ? '08:30 - 17:30' : '24/7 (All Hours)'}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
           

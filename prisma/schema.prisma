@@ -42,17 +42,25 @@ model TeamsOnUsers {
   @@id([userId, teamId])
 }
 
+enum SprintType {
+  PROJECT
+  CASUAL
+}
+
 model Sprint {
-  id         String   @id @default(cuid())
-  name       String
-  startDate  DateTime
-  endDate    DateTime
-  iterations Int?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  teamId     String
-  team       Team     @relation(fields: [teamId], references: [id])
-  tasks      Task[]
+  id               String      @id @default(cuid())
+  name             String
+  startDate        DateTime
+  endDate          DateTime
+  iterations       Int?
+  type             SprintType  @default(PROJECT)
+  defaultWorkDays  Json        @default("[1,2,3,4,5]")
+  defaultWorkHours Json        @default("{\"start\":\"08:30\",\"end\":\"17:30\"}")
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  teamId           String
+  team             Team        @relation(fields: [teamId], references: [id])
+  tasks            Task[]
 }
 
 model Task {
