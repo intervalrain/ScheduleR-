@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, differenceInDays, isPast } from "date-fns";
+import { format, differenceInDays, isPast, eachDayOfInterval, isWeekend } from "date-fns";
 import { useSession } from "next-auth/react";
-import { getMockTasksBySprintId } from "@/lib/mockData";
+import { getMockTasksBySprintId, mockBusyHours } from "@/lib/mockData";
 import { useSprint } from "@/context/SprintContext";
 import { EditSprintDialog } from "@/components/EditSprintDialog";
-import { CalendarIcon, EditIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, BarChart3Icon, HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, GitBranchIcon, MessageSquareIcon, FileTextIcon, TargetIcon, TrendingDownIcon } from "lucide-react";
+import { WidgetSelector } from "@/components/WidgetSelector";
+import { CalendarIcon, EditIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, BarChart3Icon, HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, GitBranchIcon, MessageSquareIcon, FileTextIcon, TargetIcon, TrendingDownIcon, SettingsIcon } from "lucide-react";
 
 interface Sprint {
   id: string;
@@ -23,6 +24,15 @@ interface Task {
   id: string;
   status: string;
   estimatedHours?: number;
+}
+
+interface BusyHour {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  userId: string;
+  categoryId: string;
 }
 
 interface WidgetItem {
@@ -41,7 +51,9 @@ interface WidgetConfig {
 export default function Home() {
   const { selectedSprint, loading: sprintLoading, refreshSprints } = useSprint();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [busyHours, setBusyHours] = useState<BusyHour[]>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [widgetSelectorOpen, setWidgetSelectorOpen] = useState(false);
   const [enabledWidgets, setEnabledWidgets] = useState<WidgetConfig[]>([]);
   const [currentWidgetIndex, setCurrentWidgetIndex] = useState(0);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
@@ -67,6 +79,7 @@ export default function Home() {
           { id: "completion-rate" },
           { id: "task-summary" },
           { id: "hours-summary" },
+          { id: "work-hours" },
           { id: "sprint-health" },
           { id: "progress-chart" },
           { id: "team-workload" }
@@ -95,6 +108,24 @@ export default function Home() {
       console.error("Failed to fetch tasks:", error);
     }
   }, [session]);
+
+  const fetchBusyHours = useCallback(async () => {
+    try {
+      if (!session) {
+        // Use mock data when not authenticated
+        setBusyHours(mockBusyHours);
+        return;
+      }
+      
+      const response = await fetch("/api/user/busy-hours");
+      if (response.ok) {
+        const data = await response.json();
+        setBusyHours(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch busy hours:", error);
+    }
+  }, [session]);
   
   // Auto-scroll widget bar (4 widgets at a time)
   useEffect(() => {
@@ -119,13 +150,50 @@ export default function Home() {
     if (selectedSprint) {
       fetchTasksForSprint(selectedSprint.id);
     }
-  }, [selectedSprint, fetchTasksForSprint]);
+    fetchBusyHours();
+  }, [selectedSprint, fetchTasksForSprint, fetchBusyHours]);
 
   const handleEditSprint = () => {
     if (selectedSprint) {
       setEditDialogOpen(true);
     }
   };
+
+  // Calculate available hours within sprint
+  const calculateAvailableHours = useCallback(() => {
+    if (!selectedSprint) return { totalSprintHours: 0, busyHours: 0, availableHours: 0 };
+    
+    const sprintStart = new Date(selectedSprint.startDate);
+    const sprintEnd = new Date(selectedSprint.endDate);
+    
+    // Get all days in sprint
+    const sprintDays = eachDayOfInterval({ start: sprintStart, end: sprintEnd });
+    
+    // Calculate total available hours in sprint (assuming 8 hours per work day)
+    const workDays = sprintDays.filter(day => !isWeekend(day));
+    const totalSprintHours = workDays.length * 8; // 8 hours per work day
+    
+    // Calculate busy hours within sprint period
+    const sprintBusyHours = busyHours.filter(bh => {
+      const busyStart = new Date(bh.startTime);
+      return busyStart >= sprintStart && busyStart <= sprintEnd;
+    });
+    
+    const totalBusyHours = sprintBusyHours.reduce((total, bh) => {
+      const start = new Date(bh.startTime);
+      const end = new Date(bh.endTime);
+      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Convert ms to hours
+      return total + hours;
+    }, 0);
+    
+    const availableHours = Math.max(0, totalSprintHours - totalBusyHours);
+    
+    return {
+      totalSprintHours,
+      busyHours: totalBusyHours,
+      availableHours
+    };
+  }, [selectedSprint, busyHours]);
 
 
   const totalDays = selectedSprint
@@ -149,6 +217,7 @@ export default function Home() {
   // Generate widget data based on current sprint and tasks
   const generateWidgetData = (): WidgetItem[] => {
     const widgets: WidgetItem[] = [];
+    const { totalSprintHours, busyHours: totalBusyHours, availableHours } = calculateAvailableHours();
 
     enabledWidgets.forEach(config => {
       switch (config.id) {
@@ -182,6 +251,37 @@ export default function Home() {
             color: 'text-purple-600'
           });
           break;
+        case 'work-hours':
+          widgets.push({
+            id: 'work-hours',
+            title: 'Available Hours',
+            icon: <ClockIcon className="w-4 h-4" />,
+            value: `${Math.round(availableHours)}h`,
+            description: `${Math.round(totalBusyHours)}h busy / ${Math.round(totalSprintHours)}h total`,
+            color: availableHours > totalSprintHours * 0.7 ? 'text-green-600' : 
+                   availableHours > totalSprintHours * 0.3 ? 'text-yellow-600' : 'text-red-600'
+          });
+          break;
+        case 'progress-chart':
+          widgets.push({
+            id: 'progress-chart',
+            title: 'Progress Overview',
+            icon: <BarChart3Icon className="w-4 h-4" />,
+            value: `${completedTasks}/${totalTasks}`,
+            description: `${todoTasks} pending, ${inProgressTasks} active`,
+            color: 'text-blue-600'
+          });
+          break;
+        case 'task-distribution':
+          widgets.push({
+            id: 'task-distribution',
+            title: 'Task Distribution',
+            icon: <TargetIcon className="w-4 h-4" />,
+            value: `${Math.round(taskProgressPercentage)}%`,
+            description: `${reviewTasks} in review`,
+            color: 'text-indigo-600'
+          });
+          break;
         case 'sprint-health':
           widgets.push({
             id: 'sprint-health',
@@ -210,6 +310,36 @@ export default function Home() {
             value: Math.round(taskProgressPercentage),
             description: 'Completion rate',
             color: 'text-orange-600'
+          });
+          break;
+        case 'recent-activity':
+          widgets.push({
+            id: 'recent-activity',
+            title: 'Recent Activity',
+            icon: <GitBranchIcon className="w-4 h-4" />,
+            value: `${totalTasks}`,
+            description: 'Total tasks tracked',
+            color: 'text-gray-600'
+          });
+          break;
+        case 'calendar-overview':
+          widgets.push({
+            id: 'calendar-overview',
+            title: 'Calendar Overview',
+            icon: <CalendarIcon className="w-4 h-4" />,
+            value: `${Math.round(totalBusyHours)}h`,
+            description: 'Time blocked this sprint',
+            color: 'text-pink-600'
+          });
+          break;
+        case 'sprint-progress':
+          widgets.push({
+            id: 'sprint-progress',
+            title: 'Sprint Progress',
+            icon: <TrendingUpIcon className="w-4 h-4" />,
+            value: `${elapsedDays}/${totalDays}`,
+            description: `${remainingDays} days left`,
+            color: remainingDays > 5 ? 'text-green-600' : remainingDays > 2 ? 'text-yellow-600' : 'text-red-600'
           });
           break;
         // Add more widgets as needed
@@ -245,6 +375,14 @@ export default function Home() {
   const handleWidgetClick = (index: number) => {
     setIsAutoScrolling(false);
     setCurrentWidgetIndex(index);
+  };
+
+  const handleSaveWidgets = (selectedWidgetIds: string[]) => {
+    const newWidgets = selectedWidgetIds.map(id => ({ id }));
+    setEnabledWidgets(newWidgets);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("enabledWidgets", JSON.stringify(newWidgets));
+    }
   };
 
   if (sprintLoading) {
@@ -362,6 +500,15 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-semibold">Quick Overview</CardTitle>
                   <div className="flex items-center gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setWidgetSelectorOpen(true)}
+                      className="text-sm"
+                    >
+                      <SettingsIcon className="w-4 h-4 mr-1" />
+                      Customize
+                    </Button>
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -491,6 +638,14 @@ export default function Home() {
             isOpen={editDialogOpen}
             setIsOpen={setEditDialogOpen}
             onSprintUpdated={refreshSprints}
+          />
+
+          {/* Widget Selector Dialog */}
+          <WidgetSelector
+            isOpen={widgetSelectorOpen}
+            setIsOpen={setWidgetSelectorOpen}
+            enabledWidgets={enabledWidgets.map(w => w.id)}
+            onSave={handleSaveWidgets}
           />
         </>
       ) : (
