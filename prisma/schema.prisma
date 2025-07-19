@@ -69,7 +69,7 @@ model Task {
   title          String
   description    String?
   estimatedHours Float?
-  priority       String?
+  priority       Int?
   tags           String[]
   labels         String[]
   status         String

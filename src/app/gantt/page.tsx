@@ -17,7 +17,7 @@ interface Task {
   estimatedHours?: number;
   progress?: number;
   dependsOn?: { id: string }[];
-  priority?: string;
+  priority?: number;
   subtasks?: { id: string; isCompleted: boolean }[];
   startDate?: string;
   endDate?: string;
@@ -140,7 +140,7 @@ export default function GanttPage() {
           status: "DONE",
           progress: 100,
           estimatedHours: 40,
-          priority: "500000"
+          priority: 500000
         },
         {
           id: "task2", 
@@ -148,7 +148,7 @@ export default function GanttPage() {
           status: "REVIEW",
           progress: 30,
           estimatedHours: 60,
-          priority: "400000"
+          priority: 400000
         },
         {
           id: "task3",
@@ -156,7 +156,7 @@ export default function GanttPage() {
           status: "IN_PROGRESS",
           progress: 0,
           estimatedHours: 20,
-          priority: "300000"
+          priority: 300000
         },
         {
           id: "task4",
@@ -164,7 +164,7 @@ export default function GanttPage() {
           status: "TODO",
           progress: 0,
           estimatedHours: 25,
-          priority: "200000"
+          priority: 200000
         },
         {
           id: "task5",
@@ -172,7 +172,7 @@ export default function GanttPage() {
           status: "TODO",
           progress: 0,
           estimatedHours: 15,
-          priority: "100000"
+          priority: 100000
         },
       ]);
     } finally {
@@ -212,7 +212,7 @@ export default function GanttPage() {
       }
       
       // If same status, sort by priority (lower number = higher priority)
-      return parseInt(a.priority || '999999') - parseInt(b.priority || '999999');
+      return (a.priority || 999999) - (b.priority || 999999);
     });
 
     // Helper functions

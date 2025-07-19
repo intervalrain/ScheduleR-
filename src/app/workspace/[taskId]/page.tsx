@@ -52,7 +52,7 @@ interface Task {
   title: string;
   description?: string;
   estimatedHours?: number;
-  priority?: string;
+  priority?: number;
   tags?: string[];
   status: string;
   createdAt: string;
@@ -99,7 +99,7 @@ export default function WorkspacePage() {
     title: '',
     description: '',
     status: '',
-    priority: '',
+    priority: 0,
     estimatedHours: 0,
     assigneeId: ''
   });
@@ -131,7 +131,7 @@ export default function WorkspacePage() {
         title: task.title || '',
         description: task.description || '',
         status: task.status || '',
-        priority: task.priority || '',
+        priority: task.priority || 0,
         estimatedHours: task.estimatedHours || 0,
         assigneeId: task.assignee?.id || ''
       });
@@ -487,13 +487,10 @@ export default function WorkspacePage() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "HIGH": return "destructive";
-      case "MEDIUM": return "default";
-      case "LOW": return "secondary";
-      default: return "outline";
-    }
+  const getPriorityColor = (priority: number) => {
+    if (priority < 300000) return "destructive"; // High priority
+    if (priority < 600000) return "default";     // Medium priority
+    return "secondary";                          // Low priority
   };
 
   const formatDate = (dateString: string) => {
@@ -554,7 +551,7 @@ export default function WorkspacePage() {
                   
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Priority</label>
-                    <Select value={editForm.priority} onValueChange={(value) => setEditForm({...editForm, priority: value})}>
+                    <Select value={editForm.priority.toString()} onValueChange={(value) => setEditForm({...editForm, priority: parseInt(value)})}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select priority" />
                       </SelectTrigger>
@@ -612,7 +609,7 @@ export default function WorkspacePage() {
                   </Badge>
                   {task.priority && (
                     <Badge variant={getPriorityColor(task.priority) as any}>
-                      {task.priority} Priority
+                      {task.priority < 300000 ? 'High' : task.priority < 600000 ? 'Medium' : 'Low'} Priority
                     </Badge>
                   )}
                   {task.estimatedHours && (

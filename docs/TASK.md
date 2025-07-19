@@ -268,14 +268,14 @@
 
 ### 高優先級 Bug
 
-#### B1. Priority 系統不一致 (Critical)
-- [ ] **問題**: Priority 有時為字串，有時為數字
-- [ ] **影響**: 排序邏輯錯誤，任務順序混亂
-- [ ] **修復**: 
+#### B1. Priority 系統不一致 (Critical) - ✅ **已完成**
+- [x] **問題**: Priority 有時為字串，有時為數字
+- [x] **影響**: 排序邏輯錯誤，任務順序混亂
+- [x] **修復**: 
   - 統一 Priority 為數字類型
-  - 建立 migration script 轉換現有資料
+  - 建立 migration script 轉換現有資料 (migration/20250719074500_fix_priority_to_int/)
   - 更新所有排序邏輯
-- [ ] **工作量**: 2-3天
+- [x] **工作量**: 2-3天 (**實際完成**)
 
 #### B2. 記憶體洩漏問題 (High)
 - [ ] **Calendar 組件**: Timer cleanup 問題
@@ -338,7 +338,7 @@
 ### Phase 1: 立即執行 (1-2週)
 **焦點**: 關鍵 Bug 修復 + 快速增值功能
 
-1. **B1**: Priority 系統修復 (Critical Bug)
+1. **B1**: Priority 系統修復 (Critical Bug) - ✅ **已完成**
 2. **F1**: Sprint 類型選擇實作
 3. **F2**: Gantt Auto Mode 優化
 4. **Widgets**: Progress Chart, Task Distribution (簡單 widgets)
@@ -372,7 +372,7 @@
 
 ## 🎯 關鍵里程碑
 
-- **Week 2**: Priority Bug 修復 + Sprint 類型功能完成
+- **Week 2**: ✅ Priority Bug 修復完成 + Sprint 類型功能進行中
 - **Week 4**: Gantt Manual Mode MVP + 記憶體洩漏修復
 - **Week 8**: API 測試覆蓋 60% + 6個基礎 Widgets 完成
 - **Week 12**: 前端測試覆蓋 70% + 程式碼重構完成
@@ -446,7 +446,7 @@
 
 ---
 
-*最後更新: 2025-01-18*  
+*最後更新: 2025-07-19*  
 *整合來源: dev.md, development_plan.md, plan.md, TASK.md*  
 *總任務數: 150+*  
 *預估總工時: 6-12個月 (依團隊規模)*

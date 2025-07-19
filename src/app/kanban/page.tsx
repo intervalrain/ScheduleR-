@@ -22,7 +22,7 @@ interface Task {
   title: string;
   description?: string;
   status: string;
-  priority?: string;
+  priority?: number;
   estimatedHours?: number;
   assignee?: User;
   createdBy?: User;
@@ -125,18 +125,18 @@ export default function KanbanPage() {
     // Get tasks in the destination column, sorted by priority (excluding the dragged task)
     const destTasks = tasks
       .filter(task => task.status === destStatus && task.id !== draggableId)
-      .sort((a, b) => parseInt(a.priority || "1000000") - parseInt(b.priority || "1000000"));
+      .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000));
     
     console.log('Destination tasks:', destTasks.map(t => ({ id: t.id, title: t.title, priority: t.priority })));
 
-    let newPriority: string;
+    let newPriority: number;
     let targetIndex = destination.index;
     
     // Adjust index if we're moving within the same column
     if (sourceStatus === destStatus) {
       const draggedTaskIndex = tasks
         .filter(task => task.status === destStatus)
-        .sort((a, b) => parseInt(a.priority || "1000000") - parseInt(b.priority || "1000000"))
+        .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000))
         .findIndex(task => task.id === draggableId);
       
       if (draggedTaskIndex !== -1 && draggedTaskIndex < destination.index) {
@@ -148,23 +148,23 @@ export default function KanbanPage() {
     
     if (destTasks.length === 0) {
       // First task in empty column
-      newPriority = "1000000";
+      newPriority = 1000000;
       console.log('Empty column, using default priority:', newPriority);
     } else if (targetIndex === 0) {
       // Moving to top of column
-      const firstTaskPriority = parseInt(destTasks[0].priority || "1000000");
-      newPriority = Math.max(100000, firstTaskPriority - 100000).toString();
+      const firstTaskPriority = destTasks[0].priority || 1000000;
+      newPriority = Math.max(100000, firstTaskPriority - 100000);
       console.log('Moving to top, new priority:', newPriority, 'first task priority:', firstTaskPriority);
     } else if (targetIndex >= destTasks.length) {
       // Moving to bottom of column
-      const lastTaskPriority = parseInt(destTasks[destTasks.length - 1].priority || "1000000");
-      newPriority = (lastTaskPriority + 100000).toString();
+      const lastTaskPriority = destTasks[destTasks.length - 1].priority || 1000000;
+      newPriority = lastTaskPriority + 100000;
       console.log('Moving to bottom, new priority:', newPriority, 'last task priority:', lastTaskPriority);
     } else {
       // Moving between two tasks
-      const prevTaskPriority = parseInt(destTasks[targetIndex - 1].priority || "1000000");
-      const nextTaskPriority = parseInt(destTasks[targetIndex].priority || "1000000");
-      newPriority = Math.floor((prevTaskPriority + nextTaskPriority) / 2).toString();
+      const prevTaskPriority = destTasks[targetIndex - 1].priority || 1000000;
+      const nextTaskPriority = destTasks[targetIndex].priority || 1000000;
+      newPriority = Math.floor((prevTaskPriority + nextTaskPriority) / 2);
       
       console.log('Moving between tasks:', {
         prevPriority: prevTaskPriority,
@@ -173,8 +173,8 @@ export default function KanbanPage() {
       });
       
       // Ensure we don't get the same priority as existing tasks
-      if (newPriority === prevTaskPriority.toString() || newPriority === nextTaskPriority.toString()) {
-        newPriority = (prevTaskPriority + Math.floor((nextTaskPriority - prevTaskPriority) / 3)).toString();
+      if (newPriority === prevTaskPriority || newPriority === nextTaskPriority) {
+        newPriority = prevTaskPriority + Math.floor((nextTaskPriority - prevTaskPriority) / 3);
         console.log('Adjusted priority to avoid conflict:', newPriority);
       }
     }
@@ -223,14 +223,13 @@ export default function KanbanPage() {
   const getTasksByStatus = (status: string) => {
     return tasks
       .filter((task) => task.status === status)
-      .sort((a, b) => parseInt(a.priority || "1000000") - parseInt(b.priority || "1000000"));
+      .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000));
   };
 
-  const getPriorityColor = (priority?: string) => {
+  const getPriorityColor = (priority?: number) => {
     if (!priority) return 'outline';
-    const priorityNum = parseInt(priority);
-    if (priorityNum < 600000) return 'destructive'; // High priority
-    if (priorityNum < 800000) return 'default';     // Medium priority
+    if (priority < 600000) return 'destructive'; // High priority
+    if (priority < 800000) return 'default';     // Medium priority
     return 'secondary'; // Low priority
   };
 
@@ -311,7 +310,7 @@ export default function KanbanPage() {
                               <CardContent className="p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
                                   <h3 className="font-medium leading-tight">{task.title}</h3>
-                                  {task.priority && parseInt(task.priority) < 700000 && (
+                                  {task.priority && task.priority < 700000 && (
                                     <Badge 
                                       variant={getPriorityColor(task.priority) as 'default' | 'destructive' | 'secondary' | 'outline'}
                                       className="text-xs shrink-0"

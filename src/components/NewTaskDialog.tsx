@@ -36,7 +36,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
   const [description, setDescription] = useState("");
   const [estimate, setEstimate] = useState("");
   const [assigneeId, setAssigneeId] = useState<string>("unassigned");
-  const [priority, setPriority] = useState("1000000"); // 預設排在後面
+  const [priority, setPriority] = useState(1000000); // 預設排在後面
   const [status, setStatus] = useState("TODO");
   const [tags, setTags] = useState("");
   const [labels, setLabels] = useState("");
@@ -103,7 +103,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
         setDescription("");
         setEstimate("");
         setAssigneeId(session?.user?.email ? "current-user" : "unassigned");
-        setPriority("1000000");
+        setPriority(1000000);
         setStatus("TODO");
         setTags("");
         setLabels("");
@@ -179,7 +179,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
             <label htmlFor="priority" className="text-right">
               Priority
             </label>
-            <Select value={priority} onValueChange={setPriority}>
+            <Select value={priority.toString()} onValueChange={(value) => setPriority(parseInt(value))}>
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>

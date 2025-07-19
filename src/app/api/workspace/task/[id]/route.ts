@@ -197,7 +197,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(title !== undefined && { title }),
         ...(description !== undefined && { description }),
         ...(status !== undefined && { status }),
-        ...(priority !== undefined && { priority }),
+        ...(priority !== undefined && { priority: typeof priority === 'string' ? parseInt(priority) : priority }),
         ...(estimatedHours !== undefined && { estimatedHours }),
         ...(tags !== undefined && { tags }),
         ...(assigneeId !== undefined && { assigneeId }),

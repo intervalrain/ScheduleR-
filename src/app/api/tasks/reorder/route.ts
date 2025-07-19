@@ -14,7 +14,7 @@ export async function PUT(request: Request) {
     const updatePromises = taskIds.map((taskId: string, index: number) =>
       prisma.task.update({
         where: { id: taskId },
-        data: { priority: index.toString() },
+        data: { priority: index },
       })
     );
 
