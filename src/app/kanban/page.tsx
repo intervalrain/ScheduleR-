@@ -5,6 +5,8 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTaskRefresh } from "@/context/TaskContext";
+import { useSprint } from "@/context/SprintContext";
+import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,18 +36,46 @@ export default function KanbanPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const { refreshTrigger, triggerRefresh } = useTaskRefresh();
+  const { selectedSprintId } = useSprint();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (session) {
+    if (selectedSprintId) {
       fetchTasks();
     }
-  }, [session, refreshTrigger]);
+  }, [session, selectedSprintId, refreshTrigger]);
 
   const fetchTasks = async () => {
+    if (!selectedSprintId) return;
+    
     try {
-      const response = await fetch('/api/tasks');
+      if (!session) {
+        // Use mock data when not authenticated
+        const mockTasks = getMockTasksBySprintId(selectedSprintId);
+        
+        // Add completion percentage for mock tasks
+        const tasksWithCompletion = await Promise.all(
+          mockTasks.map(async (task) => {
+            const subtasks = getMockSubTasksByTaskId(task.id);
+            const completedSubtasks = subtasks.filter(st => st.isCompleted).length;
+            const totalSubtasks = subtasks.length;
+            const completionPercentage = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+            
+            return {
+              ...task,
+              subtasks,
+              completionPercentage
+            };
+          })
+        );
+        
+        setTasks(tasksWithCompletion);
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/tasks?sprintId=${selectedSprintId}`);
       if (response.ok) {
         const fetchedTasks = await response.json();
         
@@ -91,6 +121,12 @@ export default function KanbanPage() {
     draggableId: string;
   }) => {
     const { destination, source, draggableId } = result;
+
+    // Disable drag operations when not authenticated
+    if (!session) {
+      console.log('Not authenticated, canceling drag operation');
+      return;
+    }
 
     console.log('Drag result:', { destination, source, draggableId });
 
@@ -234,17 +270,17 @@ export default function KanbanPage() {
   };
 
   const handleTaskClick = (taskId: string) => {
+    // Disable task navigation when not authenticated
+    if (!session) {
+      console.log('Not authenticated, task click disabled');
+      return;
+    }
+    
     console.log('Kanban: Task clicked:', taskId, 'Type:', typeof taskId);
     router.push(`/workspace/${taskId}`);
   };
 
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <p className="text-muted-foreground">Please sign in to view your kanban board.</p>
-      </div>
-    );
-  }
+  // Remove early return for !session to allow demo mode
 
   if (loading) {
     return (
@@ -256,6 +292,23 @@ export default function KanbanPage() {
 
   return (
     <div className="space-y-6">
+      {!session && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">!</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-amber-800">Demo Mode</h3>
+              <p className="text-xs text-amber-700">
+                You're viewing demo data. Sign in to create and manage your own tasks. 
+                <span className="font-medium"> Drag & drop and task clicks are disabled in demo mode.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Kanban Board</h1>
         <div className="text-sm text-muted-foreground">
@@ -270,7 +323,7 @@ export default function KanbanPage() {
             const statusLabels = {
               "TODO": "To Do",
               "IN_PROGRESS": "In Progress", 
-              "REVIEW": "Review",
+              "REVIEW": "Reviewing",
               "DONE": "Done"
             };
             
@@ -297,7 +350,11 @@ export default function KanbanPage() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`transition-shadow hover:shadow-md cursor-pointer ${
+                              className={`transition-shadow ${
+                                !session 
+                                  ? 'opacity-75 cursor-not-allowed hover:shadow-none' 
+                                  : 'hover:shadow-md cursor-pointer'
+                              } ${
                                 snapshot.isDragging ? 'shadow-lg rotate-2' : ''
                               }`}
                               onClick={() => {

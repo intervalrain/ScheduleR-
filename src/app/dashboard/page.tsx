@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { calculateSprintHealth } from "@/lib/utils";
 import WidgetProvider from "@/components/WidgetProvider";
-import { 
-  TrendingUpIcon, 
-  ClockIcon, 
-  CheckCircleIcon, 
+import { useSession } from "next-auth/react";
+import {
+  TrendingUpIcon,
+  ClockIcon,
+  CheckCircleIcon,
   BarChart3Icon,
   RefreshCwIcon,
   LayoutDashboardIcon,
@@ -22,7 +23,7 @@ import {
   MessageSquareIcon,
   FileTextIcon,
   TargetIcon,
-  TrendingDownIcon
+  TrendingDownIcon,
 } from "lucide-react";
 
 interface DashboardData {
@@ -47,7 +48,7 @@ interface DashboardData {
     average: number;
   };
   riskAssessment?: {
-    level: 'low' | 'medium' | 'high';
+    level: "low" | "medium" | "high";
     factors: string[];
   };
 }
@@ -73,26 +74,24 @@ interface WidgetContainerProps {
   isDragging: boolean;
 }
 
-const Widget: React.FC<WidgetContainerProps> = ({ 
-  id, 
-  title, 
-  icon, 
-  children, 
-  onDragStart, 
-  onDragOver, 
-  onDragLeave, 
-  onDrop, 
+const Widget: React.FC<WidgetContainerProps> = ({
+  id,
+  title,
+  icon,
+  children,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
   onDragEnd,
   isDraggedOver,
-  isDragging
+  isDragging,
 }) => (
-  <div 
-    key={id} 
+  <div
+    key={id}
     className={`h-full transition-all duration-200 ${
-      isDraggedOver ? 'scale-105 ring-2 ring-blue-400' : ''
-    } ${
-      isDragging ? 'opacity-50' : ''
-    }`}
+      isDraggedOver ? "scale-105 ring-2 ring-blue-400" : ""
+    } ${isDragging ? "opacity-50" : ""}`}
     draggable
     onDragStart={(e) => onDragStart(e, id)}
     onDragOver={(e) => onDragOver(e, id)}
@@ -107,14 +106,13 @@ const Widget: React.FC<WidgetContainerProps> = ({
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-0">
-        {children}
-      </CardContent>
+      <CardContent className="pt-0">{children}</CardContent>
     </Card>
   </div>
 );
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     totalTasks: 0,
     completedTasks: 0,
@@ -123,7 +121,7 @@ export default function DashboardPage() {
     completionRate: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [enabledWidgets, setEnabledWidgets] = useState<{id: string}[]>([
+  const [enabledWidgets, setEnabledWidgets] = useState<{ id: string }[]>([
     { id: "completion-rate" },
     { id: "task-summary" },
     { id: "hours-summary" },
@@ -139,12 +137,11 @@ export default function DashboardPage() {
     { id: "team-communication" },
     { id: "project-documentation" },
     { id: "performance-metrics" },
-    { id: "resource-usage" }
+    { id: "resource-usage" },
   ]);
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
-  
   // Load saved widgets from localStorage
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -156,18 +153,18 @@ export default function DashboardPage() {
             setEnabledWidgets(parsed);
           }
         } catch (e) {
-          console.error('Error parsing saved widgets:', e);
+          console.error("Error parsing saved widgets:", e);
         }
       }
     }
   }, []);
-  
+
   const handleWidgetToggle = (widgetId: string, enabled: boolean) => {
-    setEnabledWidgets(prev => {
-      const newWidgets = enabled 
-        ? [...prev.filter(w => w.id !== widgetId), { id: widgetId }]
-        : prev.filter(w => w.id !== widgetId);
-      
+    setEnabledWidgets((prev) => {
+      const newWidgets = enabled
+        ? [...prev.filter((w) => w.id !== widgetId), { id: widgetId }]
+        : prev.filter((w) => w.id !== widgetId);
+
       if (typeof window !== "undefined") {
         localStorage.setItem("enabledWidgets", JSON.stringify(newWidgets));
       }
@@ -177,12 +174,12 @@ export default function DashboardPage() {
 
   const handleDragStart = (e: React.DragEvent, widgetId: string) => {
     setDraggedItem(widgetId);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e: React.DragEvent, widgetId: string) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     setDragOverItem(widgetId);
   };
 
@@ -192,23 +189,23 @@ export default function DashboardPage() {
 
   const handleDrop = (e: React.DragEvent, targetWidgetId: string) => {
     e.preventDefault();
-    
+
     if (draggedItem && draggedItem !== targetWidgetId) {
       const newWidgets = [...enabledWidgets];
-      const draggedIndex = newWidgets.findIndex(w => w.id === draggedItem);
-      const targetIndex = newWidgets.findIndex(w => w.id === targetWidgetId);
-      
+      const draggedIndex = newWidgets.findIndex((w) => w.id === draggedItem);
+      const targetIndex = newWidgets.findIndex((w) => w.id === targetWidgetId);
+
       // Remove dragged item and insert at target position
       const [draggedWidget] = newWidgets.splice(draggedIndex, 1);
       newWidgets.splice(targetIndex, 0, draggedWidget);
-      
+
       setEnabledWidgets(newWidgets);
-      
+
       if (typeof window !== "undefined") {
         localStorage.setItem("enabledWidgets", JSON.stringify(newWidgets));
       }
     }
-    
+
     setDraggedItem(null);
     setDragOverItem(null);
   };
@@ -221,7 +218,7 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/dashboard/summary');
+      const response = await fetch("/api/dashboard/summary");
       if (response.ok) {
         const data = await response.json();
         setDashboardData(data);
@@ -238,28 +235,28 @@ export default function DashboardPage() {
             totalHours: 80,
             completedHours: 32,
             consumedHours: 36,
-            healthPercentage: calculateSprintHealth(32, 36)
+            healthPercentage: calculateSprintHealth(32, 36),
           },
           teamWorkload: {
             members: [
               { name: "Alice", workload: 32, capacity: 40 },
               { name: "Bob", workload: 38, capacity: 40 },
-              { name: "Charlie", workload: 28, capacity: 40 }
-            ]
+              { name: "Charlie", workload: 28, capacity: 40 },
+            ],
           },
           velocity: {
             currentSprint: 24,
             previousSprint: 20,
-            average: 22
+            average: 22,
           },
           riskAssessment: {
-            level: 'medium',
-            factors: ['Resource constraints', 'Technical debt']
-          }
+            level: "medium",
+            factors: ["Resource constraints", "Technical debt"],
+          },
         });
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error("Error fetching dashboard data:", error);
       // Fallback to mock data
       setDashboardData({
         totalTasks: 15,
@@ -272,24 +269,24 @@ export default function DashboardPage() {
           totalHours: 80,
           completedHours: 32,
           consumedHours: 36,
-          healthPercentage: calculateSprintHealth(32, 36)
+          healthPercentage: calculateSprintHealth(32, 36),
         },
         teamWorkload: {
           members: [
             { name: "Alice", workload: 32, capacity: 40 },
             { name: "Bob", workload: 38, capacity: 40 },
-            { name: "Charlie", workload: 28, capacity: 40 }
-          ]
+            { name: "Charlie", workload: 28, capacity: 40 },
+          ],
         },
         velocity: {
           currentSprint: 24,
           previousSprint: 20,
-          average: 22
+          average: 22,
         },
         riskAssessment: {
-          level: 'medium',
-          factors: ['Resource constraints', 'Technical debt']
-        }
+          level: "medium",
+          factors: ["Resource constraints", "Technical debt"],
+        },
       });
     } finally {
       setLoading(false);
@@ -299,7 +296,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
-
 
   if (loading) {
     return (
@@ -328,13 +324,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {!session && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">📊</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-indigo-800">
+                Demo Mode - Dashboard
+              </h3>
+              <p className="text-xs text-indigo-700">
+                You're viewing demo analytics and widgets. Sign in to connect
+                your real project data and customize your dashboard.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <LayoutDashboardIcon className="w-6 h-6" />
           Dashboard
         </h1>
         <div className="flex items-center gap-2">
-          <WidgetProvider 
+          <WidgetProvider
             enabledWidgets={enabledWidgets}
             onWidgetToggle={handleWidgetToggle}
           />
@@ -346,11 +361,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-4 auto-rows-fr">
-        {enabledWidgets.map(widget => {
+        {enabledWidgets.map((widget) => {
           switch (widget.id) {
             case "completion-rate":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Sprint Completion Rate"
@@ -368,18 +383,18 @@ export default function DashboardPage() {
                       {dashboardData.completionRate}%
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-primary h-2 rounded-full transition-all duration-300" 
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all duration-300"
                         style={{ width: `${dashboardData.completionRate}%` }}
                       ></div>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "task-summary":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Task Summary"
@@ -394,24 +409,36 @@ export default function DashboardPage() {
                 >
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Total</span>
-                      <span className="font-medium">{dashboardData.totalTasks}</span>
+                      <span className="text-sm text-muted-foreground">
+                        Total
+                      </span>
+                      <span className="font-medium">
+                        {dashboardData.totalTasks}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Completed</span>
-                      <span className="font-medium text-green-600">{dashboardData.completedTasks}</span>
+                      <span className="text-sm text-muted-foreground">
+                        Completed
+                      </span>
+                      <span className="font-medium text-green-600">
+                        {dashboardData.completedTasks}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">In Progress</span>
-                      <span className="font-medium text-blue-600">{dashboardData.ongoingTasks}</span>
+                      <span className="text-sm text-muted-foreground">
+                        In Progress
+                      </span>
+                      <span className="font-medium text-blue-600">
+                        {dashboardData.ongoingTasks}
+                      </span>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "hours-summary":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Work Hours"
@@ -434,10 +461,10 @@ export default function DashboardPage() {
                   </div>
                 </Widget>
               );
-              
+
             case "sprint-health":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Sprint Health"
@@ -451,35 +478,47 @@ export default function DashboardPage() {
                   isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
-                    <div className="text-3xl font-bold mb-2" style={{ 
-                      color: dashboardData.sprintHealth ? 
-                        dashboardData.sprintHealth.healthPercentage >= 90 ? '#10b981' : 
-                        dashboardData.sprintHealth.healthPercentage >= 70 ? '#f59e0b' : '#ef4444' 
-                        : '#6b7280' 
-                    }}>
+                    <div
+                      className="text-3xl font-bold mb-2"
+                      style={{
+                        color: dashboardData.sprintHealth
+                          ? dashboardData.sprintHealth.healthPercentage >= 90
+                            ? "#10b981"
+                            : dashboardData.sprintHealth.healthPercentage >= 70
+                            ? "#f59e0b"
+                            : "#ef4444"
+                          : "#6b7280",
+                      }}
+                    >
                       {dashboardData.sprintHealth?.healthPercentage || 0}%
                     </div>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
                         <span>Total:</span>
-                        <span>{dashboardData.sprintHealth?.totalHours || 0}h</span>
+                        <span>
+                          {dashboardData.sprintHealth?.totalHours || 0}h
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Completed:</span>
-                        <span className="text-green-600">{dashboardData.sprintHealth?.completedHours || 0}h</span>
+                        <span className="text-green-600">
+                          {dashboardData.sprintHealth?.completedHours || 0}h
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Consumed:</span>
-                        <span className="text-blue-600">{dashboardData.sprintHealth?.consumedHours || 0}h</span>
+                        <span className="text-blue-600">
+                          {dashboardData.sprintHealth?.consumedHours || 0}h
+                        </span>
                       </div>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "progress-chart":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Progress Overview"
@@ -495,32 +534,58 @@ export default function DashboardPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span>Done</span>
-                      <span>{Math.round((dashboardData.completedTasks / dashboardData.totalTasks) * 100)}%</span>
+                      <span>
+                        {Math.round(
+                          (dashboardData.completedTasks /
+                            dashboardData.totalTasks) *
+                            100
+                        )}
+                        %
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-500 h-2 rounded-full" 
-                        style={{ width: `${(dashboardData.completedTasks / dashboardData.totalTasks) * 100}%` }}
+                      <div
+                        className="bg-green-500 h-2 rounded-full"
+                        style={{
+                          width: `${
+                            (dashboardData.completedTasks /
+                              dashboardData.totalTasks) *
+                            100
+                          }%`,
+                        }}
                       ></div>
                     </div>
-                    
+
                     <div className="flex items-center justify-between text-sm">
                       <span>In Progress</span>
-                      <span>{Math.round((dashboardData.ongoingTasks / dashboardData.totalTasks) * 100)}%</span>
+                      <span>
+                        {Math.round(
+                          (dashboardData.ongoingTasks /
+                            dashboardData.totalTasks) *
+                            100
+                        )}
+                        %
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-500 h-2 rounded-full" 
-                        style={{ width: `${(dashboardData.ongoingTasks / dashboardData.totalTasks) * 100}%` }}
+                      <div
+                        className="bg-blue-500 h-2 rounded-full"
+                        style={{
+                          width: `${
+                            (dashboardData.ongoingTasks /
+                              dashboardData.totalTasks) *
+                            100
+                          }%`,
+                        }}
                       ></div>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "team-workload":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Team Workload"
@@ -534,30 +599,42 @@ export default function DashboardPage() {
                   isDragging={draggedItem === widget.id}
                 >
                   <div className="space-y-2">
-                    {dashboardData.teamWorkload?.members.map((member, index) => (
-                      <div key={index} className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span>{member.name}</span>
-                          <span>{member.workload}h/{member.capacity}h</span>
+                    {dashboardData.teamWorkload?.members.map(
+                      (member, index) => (
+                        <div key={index} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span>{member.name}</span>
+                            <span>
+                              {member.workload}h/{member.capacity}h
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full transition-all duration-300 ${
+                                member.workload > member.capacity
+                                  ? "bg-red-500"
+                                  : member.workload > member.capacity * 0.8
+                                  ? "bg-yellow-500"
+                                  : "bg-green-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  (member.workload / member.capacity) * 100
+                                )}%`,
+                              }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div 
-                            className={`h-1.5 rounded-full transition-all duration-300 ${
-                              member.workload > member.capacity ? 'bg-red-500' : 
-                              member.workload > member.capacity * 0.8 ? 'bg-yellow-500' : 'bg-green-500'
-                            }`}
-                            style={{ width: `${Math.min(100, (member.workload / member.capacity) * 100)}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    )}
                   </div>
                 </Widget>
               );
-              
+
             case "velocity":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Sprint Velocity"
@@ -574,11 +651,15 @@ export default function DashboardPage() {
                     <div className="text-2xl font-bold text-primary mb-2">
                       {dashboardData.velocity?.currentSprint || 0}
                     </div>
-                    <div className="text-xs text-muted-foreground mb-2">Story Points</div>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      Story Points
+                    </div>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between">
                         <span>Previous:</span>
-                        <span>{dashboardData.velocity?.previousSprint || 0}</span>
+                        <span>
+                          {dashboardData.velocity?.previousSprint || 0}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Average:</span>
@@ -586,23 +667,28 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex justify-between">
                         <span>Trend:</span>
-                        <span className={
-                          (dashboardData.velocity?.currentSprint || 0) > (dashboardData.velocity?.previousSprint || 0) 
-                            ? 'text-green-600' : 'text-red-600'
-                        }>
-                          {(dashboardData.velocity?.currentSprint || 0) > (dashboardData.velocity?.previousSprint || 0) 
-                            ? '↗' : '↘'
+                        <span
+                          className={
+                            (dashboardData.velocity?.currentSprint || 0) >
+                            (dashboardData.velocity?.previousSprint || 0)
+                              ? "text-green-600"
+                              : "text-red-600"
                           }
+                        >
+                          {(dashboardData.velocity?.currentSprint || 0) >
+                          (dashboardData.velocity?.previousSprint || 0)
+                            ? "↗"
+                            : "↘"}
                         </span>
                       </div>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "risk-assessment":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Risk Assessment"
@@ -616,27 +702,34 @@ export default function DashboardPage() {
                   isDragging={draggedItem === widget.id}
                 >
                   <div className="text-center">
-                    <div className={`text-2xl font-bold mb-2 ${
-                      dashboardData.riskAssessment?.level === 'high' ? 'text-red-500' :
-                      dashboardData.riskAssessment?.level === 'medium' ? 'text-yellow-500' :
-                      'text-green-500'
-                    }`}>
-                      {dashboardData.riskAssessment?.level?.toUpperCase() || 'LOW'}
+                    <div
+                      className={`text-2xl font-bold mb-2 ${
+                        dashboardData.riskAssessment?.level === "high"
+                          ? "text-red-500"
+                          : dashboardData.riskAssessment?.level === "medium"
+                          ? "text-yellow-500"
+                          : "text-green-500"
+                      }`}
+                    >
+                      {dashboardData.riskAssessment?.level?.toUpperCase() ||
+                        "LOW"}
                     </div>
                     <div className="text-xs space-y-1">
-                      {dashboardData.riskAssessment?.factors.map((factor, index) => (
-                        <div key={index} className="text-muted-foreground">
-                          • {factor}
-                        </div>
-                      ))}
+                      {dashboardData.riskAssessment?.factors.map(
+                        (factor, index) => (
+                          <div key={index} className="text-muted-foreground">
+                            • {factor}
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "burndown":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Burn Down Chart"
@@ -651,7 +744,7 @@ export default function DashboardPage() {
                 >
                   <div className="h-32 flex items-end space-x-1">
                     {dashboardData.burndownData?.map((value, index) => (
-                      <div 
+                      <div
                         key={index}
                         className="flex-1 bg-primary rounded-t opacity-80 hover:opacity-100 transition-opacity"
                         style={{ height: `${(value / 100) * 100}%` }}
@@ -664,10 +757,10 @@ export default function DashboardPage() {
                   </div>
                 </Widget>
               );
-              
+
             case "recent-activity":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Recent Activity"
@@ -684,31 +777,39 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <div className="flex-1">
-                        <div className="text-sm font-medium">Task completed</div>
-                        <div className="text-xs text-muted-foreground">Design Database Schema</div>
+                        <div className="text-sm font-medium">
+                          Task completed
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Design Database Schema
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       <div className="flex-1">
                         <div className="text-sm font-medium">Task started</div>
-                        <div className="text-xs text-muted-foreground">Implement Authentication</div>
+                        <div className="text-xs text-muted-foreground">
+                          Implement Authentication
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                       <div className="flex-1">
                         <div className="text-sm font-medium">Task created</div>
-                        <div className="text-xs text-muted-foreground">Setup CI/CD Pipeline</div>
+                        <div className="text-xs text-muted-foreground">
+                          Setup CI/CD Pipeline
+                        </div>
                       </div>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "calendar-overview":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Calendar Overview"
@@ -737,10 +838,10 @@ export default function DashboardPage() {
                   </div>
                 </Widget>
               );
-              
+
             case "code-commits":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Code Commits"
@@ -769,10 +870,10 @@ export default function DashboardPage() {
                   </div>
                 </Widget>
               );
-              
+
             case "team-communication":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Team Communication"
@@ -787,24 +888,30 @@ export default function DashboardPage() {
                 >
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">A</div>
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
+                        A
+                      </div>
                       <span>New bug report filed</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">B</div>
+                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">
+                        B
+                      </div>
                       <span>PR approved & merged</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs">C</div>
+                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs">
+                        C
+                      </div>
                       <span>Design review complete</span>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             case "project-documentation":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Project Documentation"
@@ -833,10 +940,10 @@ export default function DashboardPage() {
                   </div>
                 </Widget>
               );
-              
+
             case "performance-metrics":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Performance Metrics"
@@ -865,10 +972,10 @@ export default function DashboardPage() {
                   </div>
                 </Widget>
               );
-              
+
             case "resource-usage":
               return (
-                <Widget 
+                <Widget
                   key={widget.id}
                   id={widget.id}
                   title="Resource Usage"
@@ -887,19 +994,25 @@ export default function DashboardPage() {
                       <span className="font-bold">24%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: '24%' }}></div>
+                      <div
+                        className="bg-blue-500 h-1.5 rounded-full"
+                        style={{ width: "24%" }}
+                      ></div>
                     </div>
                     <div className="flex justify-between">
                       <span>Memory</span>
                       <span className="font-bold">67%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div className="bg-yellow-500 h-1.5 rounded-full" style={{ width: '67%' }}></div>
+                      <div
+                        className="bg-yellow-500 h-1.5 rounded-full"
+                        style={{ width: "67%" }}
+                      ></div>
                     </div>
                   </div>
                 </Widget>
               );
-              
+
             default:
               return null;
           }

@@ -16,12 +16,14 @@ interface CategoryManagementModalProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   onCategoriesUpdated: () => void;
+  isReadOnly?: boolean;
 }
 
 export function CategoryManagementModal({
   isOpen,
   setIsOpen,
   onCategoriesUpdated,
+  isReadOnly = false,
 }: CategoryManagementModalProps) {
   const [categories, setCategories] = useState<{id: string; name: string; color: string}[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -45,6 +47,8 @@ export function CategoryManagementModal({
   }, [isOpen, fetchCategories]);
 
   const handleAddCategory = async () => {
+    if (isReadOnly) return;
+    
     if (!newCategoryName.trim()) {
       console.error("Category name cannot be empty.");
       return;
@@ -67,6 +71,8 @@ export function CategoryManagementModal({
   };
 
   const handleDeleteCategory = async (id: string) => {
+    if (isReadOnly) return;
+    
     try {
       await fetch(`/api/user/categories/${id}`, { method: "DELETE" });
       fetchCategories(); // Refresh categories
@@ -92,7 +98,12 @@ export function CategoryManagementModal({
                   <div className="w-6 h-6 rounded-full" style={{ backgroundColor: category.color }} />
                   <span>{category.name}</span>
                 </div>
-                <Button variant="destructive" size="sm" onClick={() => handleDeleteCategory(category.id)}>
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={() => handleDeleteCategory(category.id)}
+                  disabled={isReadOnly}
+                >
                   Delete
                 </Button>
               </div>
@@ -103,15 +114,19 @@ export function CategoryManagementModal({
           <Input 
             placeholder="Category Name" 
             value={newCategoryName} 
-            onChange={(e) => setNewCategoryName(e.target.value)} 
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            disabled={isReadOnly}
           />
           <Input 
             type="color" 
             value={newCategoryColor} 
             onChange={(e) => setNewCategoryColor(e.target.value)} 
             className="w-16"
+            disabled={isReadOnly}
           />
-          <Button onClick={handleAddCategory}>Add Category</Button>
+          <Button onClick={handleAddCategory} disabled={isReadOnly}>
+            {isReadOnly ? 'Preview Mode' : 'Add Category'}
+          </Button>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>

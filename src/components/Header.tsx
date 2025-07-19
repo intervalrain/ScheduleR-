@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSprint } from "@/context/SprintContext";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -41,20 +42,8 @@ const navigationTabs = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon },
 ];
 
-interface Sprint {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  type: 'PROJECT' | 'CASUAL';
-  defaultWorkDays: number[];
-  defaultWorkHours: { start: string; end: string };
-}
-
 export default function Header() {
-  const [sprints, setSprints] = useState<Sprint[]>([]);
-  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
-  const [sprintsLoading, setSprintsLoading] = useState(false);
+  const { sprints, selectedSprintId, setSelectedSprintId, refreshSprints, loading: sprintsLoading } = useSprint();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [isClient, setIsClient] = useState(false);
   const { openNewTaskDialog } = useNewTaskDialog();
@@ -79,57 +68,7 @@ export default function Header() {
     return () => clearInterval(timer);
   }, [isClient]);
 
-  // Fetch sprints when user is authenticated
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session) {
-      setSprints([]);
-      return;
-    }
-
-    const fetchSprints = async () => {
-      setSprintsLoading(true);
-      try {
-        const response = await fetch('/api/sprints');
-        if (response.ok) {
-          const data = await response.json();
-          setSprints(data);
-          // Auto-select the first sprint if none selected
-          if (data.length > 0 && !selectedSprintId) {
-            setSelectedSprintId(data[0].id);
-          }
-        } else {
-          console.error('Failed to fetch sprints');
-        }
-      } catch (error) {
-        console.error('Error fetching sprints:', error);
-      } finally {
-        setSprintsLoading(false);
-      }
-    };
-
-    fetchSprints();
-  }, [session, status, selectedSprintId]);
-
-  const refreshSprints = async () => {
-    if (!session) return;
-    setSprintsLoading(true);
-    try {
-      const response = await fetch('/api/sprints');
-      if (response.ok) {
-        const data = await response.json();
-        setSprints(data);
-        // Auto-select the newly created sprint (first one)
-        if (data.length > 0) {
-          setSelectedSprintId(data[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing sprints:', error);
-    } finally {
-      setSprintsLoading(false);
-    }
-  };
+  // Sprint management is now handled by SprintContext
 
   const deleteSprint = async (sprintId: string, sprintName: string) => {
     if (!confirm(`Are you sure you want to delete "${sprintName}"?`)) return;

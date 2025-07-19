@@ -16,6 +16,7 @@ import {
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
+import { mockBusyHours, mockBusyHourCategories } from "@/lib/mockData";
 import { NewBusyHourDialog, RegularHourSettingsModal, CategoryManagementModal, DeleteConfirmationModal } from "@/components";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,17 @@ export default function CalendarPage() {
   // Data Fetching
   const fetchBusyHours = useCallback(async () => {
     try {
+      if (!session) {
+        // Use mock data when not authenticated
+        const mockData = mockBusyHours.map(bh => ({
+          ...bh,
+          startTime: new Date(bh.startTime),
+          endTime: new Date(bh.endTime)
+        }));
+        setBusyHours(mockData);
+        return;
+      }
+      
       const response = await fetch("/api/user/busy-hours");
       if (response.ok) {
         const data = await response.json();
@@ -80,7 +92,7 @@ export default function CalendarPage() {
     } catch (error) {
       console.error("Failed to fetch busy hours:", error);
     }
-  }, []);
+  }, [session]);
 
   const fetchUserSettings = useCallback(async () => {
     try {
@@ -125,6 +137,12 @@ export default function CalendarPage() {
 
   const fetchCategories = useCallback(async () => {
     try {
+      if (!session) {
+        // Use mock data when not authenticated
+        setCategories(mockBusyHourCategories);
+        return;
+      }
+      
       const response = await fetch("/api/user/categories");
       if (response.ok) {
         const data = await response.json();
@@ -152,19 +170,24 @@ export default function CalendarPage() {
     } catch (error) {
       console.error("Failed to fetch categories:", error);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    if (session) {
-      fetchBusyHours();
-      fetchUserSettings();
-      fetchSprints();
-      fetchCategories();
-    }
+    // Always fetch data, regardless of session status
+    fetchBusyHours();
+    fetchUserSettings();
+    fetchSprints();
+    fetchCategories();
   }, [session, fetchBusyHours, fetchUserSettings, fetchSprints, fetchCategories]);
 
   // Event Handlers
   const handleRangeSelected = (range: { startTime: Date; endTime: Date }) => {
+    // Disable range selection when not authenticated
+    if (!session) {
+      console.log('Not authenticated, range selection disabled');
+      return;
+    }
+    
     setSelectedRange(range);
     setIsDialogOpen(true);
   };
@@ -199,7 +222,23 @@ export default function CalendarPage() {
 
   // Render Logic
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="space-y-6">
+      {!session && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">📅</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-green-800">Demo Mode - Calendar</h3>
+              <p className="text-xs text-green-700">
+                You're viewing demo busy hours and categories. Sign in to manage your own schedule and time blocks.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <Header 
         currentDate={currentDate}
         setCurrentDate={setCurrentDate}
@@ -210,23 +249,25 @@ export default function CalendarPage() {
         onOpenCategoryModal={() => setIsCategoryModalOpen(true)}
       />
       <NewBusyHourDialog
-        isOpen={isDialogOpen}
-        setIsOpen={setIsDialogOpen}
+        isOpen={session ? isDialogOpen : false}
+        setIsOpen={session ? setIsDialogOpen : () => {}}
         selectedRange={selectedRange}
         onBusyHourCreated={handleBusyHourCreated}
         categories={categories}
-        onOpenCategoryModal={() => setIsCategoryModalOpen(true)}
+        onOpenCategoryModal={() => session && setIsCategoryModalOpen(true)}
       />
       <RegularHourSettingsModal
         isOpen={isRegularHoursModalOpen}
         setIsOpen={setIsRegularHoursModalOpen}
         userSettings={userSettings}
-        onSave={handleSaveRegularHours}
+        onSave={session ? handleSaveRegularHours : () => {}}
+        isReadOnly={!session}
       />
       <CategoryManagementModal
         isOpen={isCategoryModalOpen}
         setIsOpen={setIsCategoryModalOpen}
-        onCategoriesUpdated={fetchCategories}
+        onCategoriesUpdated={session ? fetchCategories : () => {}}
+        isReadOnly={!session}
       />
       {view === 'week' ? (
         <WeekView 
@@ -237,6 +278,7 @@ export default function CalendarPage() {
           onRangeSelected={handleRangeSelected}
           onBusyHourDeleted={fetchBusyHours}
           categories={categories}
+          isReadOnly={!session}
         />
       ) : (
         <MonthView 
@@ -245,6 +287,7 @@ export default function CalendarPage() {
           busyHours={busyHours} 
           sprints={sprints} 
           onDayClick={handleDayClick}
+          isReadOnly={!session}
         />
       )}
     </div>

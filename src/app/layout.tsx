@@ -5,6 +5,7 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import { NewTaskDialogProvider, useNewTaskDialog } from "@/components/NewTaskDialogProvider";
 import { TaskProvider } from "@/context/TaskContext";
+import { SprintProvider } from "@/context/SprintContext";
 import { useHotkeys } from "react-hotkeys-hook";
 import { CommandPalette } from "@/components/CommandPalette";
 import Header from "@/components/Header";
@@ -58,11 +59,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SessionProvider>
-          <TaskProvider>
-            <NewTaskDialogProvider>
-              <AppProviders>{children}</AppProviders>
-            </NewTaskDialogProvider>
-          </TaskProvider>
+          <SprintProvider>
+            <TaskProvider>
+              <NewTaskDialogProvider>
+                <AppProviders>{children}</AppProviders>
+              </NewTaskDialogProvider>
+            </TaskProvider>
+          </SprintProvider>
         </SessionProvider>
       </body>
     </html>

@@ -30,6 +30,7 @@ interface RegularHourSettingsModalProps {
     show24Hours?: boolean;
     weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   }) => void;
+  isReadOnly?: boolean;
 }
 
 const daysOfWeek = [
@@ -47,6 +48,7 @@ export function RegularHourSettingsModal({
   setIsOpen,
   userSettings,
   onSave,
+  isReadOnly = false,
 }: RegularHourSettingsModalProps) {
   const [workHours, setWorkHours] = useState(userSettings.workHours);
   const [workDays, setWorkDays] = useState(userSettings.workDays);
@@ -91,6 +93,7 @@ export function RegularHourSettingsModal({
                   onChange={(e) =>
                     setWorkHours({ ...workHours, start: e.target.value })
                   }
+                  disabled={isReadOnly}
                 />
               </div>
               <div>
@@ -102,6 +105,7 @@ export function RegularHourSettingsModal({
                   onChange={(e) =>
                     setWorkHours({ ...workHours, end: e.target.value })
                   }
+                  disabled={isReadOnly}
                 />
               </div>
             </div>
@@ -116,6 +120,7 @@ export function RegularHourSettingsModal({
                     id={`day-${day.id}`}
                     checked={workDays.includes(day.id)}
                     onCheckedChange={() => handleWorkDayChange(day.id)}
+                    disabled={isReadOnly}
                   />
                   <Label htmlFor={`day-${day.id}`}>{day.label}</Label>
                 </div>
@@ -128,6 +133,7 @@ export function RegularHourSettingsModal({
               id="show-24-hours"
               checked={show24Hours}
               onCheckedChange={(checked: boolean) => setShow24Hours(checked)}
+              disabled={isReadOnly}
             />
             <Label htmlFor="show-24-hours">Show 24-hour view</Label>
           </div>
@@ -137,6 +143,7 @@ export function RegularHourSettingsModal({
             <Select
               value={weekStartsOn.toString()}
               onValueChange={(value) => setWeekStartsOn(parseInt(value) as 0 | 1 | 2 | 3 | 4 | 5 | 6)}
+              disabled={isReadOnly}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -154,7 +161,9 @@ export function RegularHourSettingsModal({
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={handleSave}>Save Changes</Button>
+          <Button onClick={handleSave} disabled={isReadOnly}>
+            {isReadOnly ? 'Preview Mode' : 'Save Changes'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSprint } from "@/context/SprintContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon, RefreshCwIcon } from "lucide-react";
 import { useTaskRefresh } from "@/context/TaskContext";
 import { Chart } from "react-google-charts";
+import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData";
+import { useSession } from "next-auth/react";
 import { addDays, differenceInDays, format } from "date-fns";
 
 interface Task {
@@ -35,40 +38,36 @@ interface Sprint {
   name: string;
   startDate: string;
   endDate: string;
+  type?: 'PROJECT' | 'CASUAL';
+  defaultWorkDays?: number[];
+  defaultWorkHours?: { start: string; end: string };
 }
 
 export default function GanttPage() {
   const { refreshTrigger } = useTaskRefresh();
+  const { selectedSprint, selectedSprintId } = useSprint();
+  const { data: session } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<string>('Month');
-  const [currentSprint, setCurrentSprint] = useState<Sprint | null>(null);
   const [userSettings, setUserSettings] = useState<{
     workHours: { start: string; end: string };
     workDays: number[];
   }>({ workHours: { start: '09:00', end: '17:00' }, workDays: [1, 2, 3, 4, 5] });
 
-  const fetchSprint = async () => {
-    try {
-      const response = await fetch('/api/sprints');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.length > 0) {
-          // Find current active sprint or use the first one
-          const now = new Date();
-          const activeSprint = data.find((sprint: Sprint) => {
-            const start = new Date(sprint.startDate);
-            const end = new Date(sprint.endDate);
-            return now >= start && now <= end;
-          });
-          setCurrentSprint(activeSprint || data[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching sprint:', error);
+  // Update work settings when selected sprint changes
+  useEffect(() => {
+    if (selectedSprint?.defaultWorkDays && selectedSprint?.defaultWorkHours) {
+      setUserSettings({
+        workDays: selectedSprint.defaultWorkDays,
+        workHours: selectedSprint.defaultWorkHours
+      });
+    } else {
+      // Fall back to user settings if Sprint doesn't have settings
+      fetchUserSettings();
     }
-  };
+  }, [selectedSprint]);
 
   const fetchUserSettings = async () => {
     try {
@@ -87,10 +86,37 @@ export default function GanttPage() {
   };
 
   const fetchTasks = async () => {
+    if (!selectedSprintId) return;
+    
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/tasks');
+      if (!session) {
+        // Use mock data when not authenticated
+        const mockTasks = getMockTasksBySprintId(selectedSprintId);
+        
+        const tasksWithSubtasks = await Promise.all(
+          mockTasks.map(async (task) => {
+            const subtasks = getMockSubTasksByTaskId(task.id);
+            const completedSubtasks = subtasks.filter((st) => st.isCompleted).length;
+            const totalSubtasks = subtasks.length;
+            const progress = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+            
+            return {
+              ...task,
+              subtasks,
+              progress,
+              estimatedHours: task.estimatedHours || 8
+            };
+          })
+        );
+        
+        setTasks(tasksWithSubtasks);
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/tasks?sprintId=${selectedSprintId}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -181,25 +207,25 @@ export default function GanttPage() {
   };
 
   useEffect(() => {
-    fetchSprint();
-    fetchTasks();
-    fetchUserSettings();
-  }, [refreshTrigger]);
+    if (selectedSprintId) {
+      fetchTasks();
+    }
+  }, [selectedSprintId, refreshTrigger]);
   
   // Refresh chart when view mode changes
   useEffect(() => {
-    if (currentSprint && tasks.length > 0) {
+    if (selectedSprint && tasks.length > 0) {
       // Force chart re-render by updating a state or key
       console.log(`View mode changed to: ${viewMode}`);
     }
-  }, [viewMode, currentSprint, tasks]);
+  }, [viewMode, selectedSprint, tasks]);
 
   // Calculate task scheduling using double pointer approach
   const calculateTaskSchedule = () => {
-    if (!currentSprint) return [];
+    if (!selectedSprint) return [];
     
-    const sprintStartDate = new Date(currentSprint.startDate);
-    const sprintEndDate = new Date(currentSprint.endDate);
+    const sprintStartDate = new Date(selectedSprint.startDate);
+    const sprintEndDate = new Date(selectedSprint.endDate);
     
     // Sort tasks by status priority (DONE > REVIEW > IN_PROGRESS > TODO) then by priority (high to low)
     const sortedTasks = [...tasks].sort((a, b) => {
@@ -391,10 +417,10 @@ export default function GanttPage() {
 
   // Get chart date range based on view mode
   const getChartDateRange = () => {
-    if (!currentSprint) return { start: new Date(), end: new Date() };
+    if (!selectedSprint) return { start: new Date(), end: new Date() };
     
-    const sprintStart = new Date(currentSprint.startDate);
-    const sprintEnd = new Date(currentSprint.endDate);
+    const sprintStart = new Date(selectedSprint.startDate);
+    const sprintEnd = new Date(selectedSprint.endDate);
     
     // Always show the full sprint range
     return { start: sprintStart, end: sprintEnd };
@@ -444,8 +470,8 @@ export default function GanttPage() {
     });
 
     // Add sprint end marker in Full view
-    if (currentSprint) {
-      const sprintEndDate = new Date(currentSprint.endDate);
+    if (selectedSprint) {
+      const sprintEndDate = new Date(selectedSprint.endDate);
       // Set end time to 23:59:59 of the sprint end date
       sprintEndDate.setHours(23, 59, 59, 999);
       
@@ -644,6 +670,22 @@ export default function GanttPage() {
 
   return (
     <div className="space-y-6 w-full max-w-full">
+      {!session && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">i</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-blue-800">Demo Mode - Gantt Chart</h3>
+              <p className="text-xs text-blue-700">
+                You're viewing demo data with automatic scheduling. Sign in to create your own projects and see real-time task scheduling.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <CalendarIcon className="w-6 h-6" />
@@ -669,23 +711,29 @@ export default function GanttPage() {
       </div>
 
       {/* Sprint Information */}
-      {currentSprint && (
+      {selectedSprint && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarIcon className="w-5 h-5" />
-              Current Sprint: {currentSprint.name}
+              Current Sprint: {selectedSprint.name} ({selectedSprint.type || 'PROJECT'})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>Start: {format(new Date(currentSprint.startDate), 'MMM dd, yyyy')}</span>
-              <span>End: {format(new Date(currentSprint.endDate), 'MMM dd, yyyy')}</span>
-              <span>Duration: {differenceInDays(new Date(currentSprint.endDate), new Date(currentSprint.startDate)) + 1} days</span>
+              <span>Start: {format(new Date(selectedSprint.startDate), 'MMM dd, yyyy')}</span>
+              <span>End: {format(new Date(selectedSprint.endDate), 'MMM dd, yyyy')}</span>
+              <span>Duration: {differenceInDays(new Date(selectedSprint.endDate), new Date(selectedSprint.startDate)) + 1} days</span>
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              <span className="font-medium">View Range:</span> {format(chartDateRange.start, 'MMM dd, yyyy')} - {format(chartDateRange.end, 'MMM dd, yyyy')} 
-              <span className="ml-2">({differenceInDays(chartDateRange.end, chartDateRange.start) + 1} days)</span>
+              <div>
+                <span className="font-medium">Work Hours:</span> {userSettings.workHours.start} - {userSettings.workHours.end}
+                <span className="ml-4 font-medium">Work Days:</span> {userSettings.workDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}
+              </div>
+              <div className="mt-1">
+                <span className="font-medium">View Range:</span> {format(chartDateRange.start, 'MMM dd, yyyy')} - {format(chartDateRange.end, 'MMM dd, yyyy')} 
+                <span className="ml-2">({differenceInDays(chartDateRange.end, chartDateRange.start) + 1} days)</span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -702,7 +750,7 @@ export default function GanttPage() {
           <CardContent className="p-0">
             {scheduledTasks.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground px-6">
-                {!currentSprint ? 'No active sprint found' : 'No tasks available for Gantt chart'}
+                {!selectedSprint ? 'No active sprint found' : 'No tasks available for Gantt chart'}
               </div>
             ) : (
               <div className="w-full">
@@ -718,7 +766,7 @@ export default function GanttPage() {
                     minWidth: viewMode === 'Full' ? '100%' : '800px' 
                   }}>
                     <Chart
-                      key={`gantt-${viewMode}-${currentSprint?.id || 'no-sprint'}-${tasks.length}`}
+                      key={`gantt-${viewMode}-${selectedSprint?.id || 'no-sprint'}-${tasks.length}`}
                       chartType="Gantt"
                       width={viewMode === 'Full' ? '100%' : chartWidth}
                       height={ganttOptions.height}

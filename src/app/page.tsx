@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, differenceInDays, isPast, addDays, parseISO } from "date-fns";
 import { useSession } from "next-auth/react";
+import { mockSprints, mockTasks, getMockTasksBySprintId } from "@/lib/mockData";
 import { CalendarIcon, EditIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, BarChart3Icon, HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, GitBranchIcon, MessageSquareIcon, FileTextIcon, TargetIcon, TrendingDownIcon } from "lucide-react";
 
 interface Sprint {
@@ -57,9 +58,8 @@ export default function Home() {
   const { data: session } = useSession();
 
   useEffect(() => {
-    if (session) {
-      fetchSprints();
-    }
+    // Always fetch sprints, regardless of session status
+    fetchSprints();
     
     // Load enabled widgets from localStorage
     if (typeof window !== "undefined") {
@@ -111,11 +111,25 @@ export default function Home() {
     if (selectedSprint) {
       fetchTasksForSprint(selectedSprint.id);
     }
-  }, [selectedSprint]);
+  }, [selectedSprint, session]);
 
   const fetchSprints = async () => {
     try {
       setLoading(true);
+      
+      if (!session) {
+        // Use mock data when not authenticated
+        setSprints(mockSprints);
+        const now = new Date();
+        const activeSprint = mockSprints.find((sprint) => {
+          const start = new Date(sprint.startDate);
+          const end = new Date(sprint.endDate);
+          return now >= start && now <= end;
+        });
+        setSelectedSprint(activeSprint || mockSprints[0]);
+        return;
+      }
+      
       const response = await fetch("/api/sprints");
       if (response.ok) {
         const data = await response.json();
@@ -140,6 +154,13 @@ export default function Home() {
 
   const fetchTasksForSprint = async (sprintId: string) => {
     try {
+      if (!session) {
+        // Use mock data when not authenticated
+        const mockSprintTasks = getMockTasksBySprintId(sprintId);
+        setTasks(mockSprintTasks);
+        return;
+      }
+      
       const response = await fetch(`/api/tasks?sprintId=${sprintId}`);
       if (response.ok) {
         const data = await response.json();
@@ -330,7 +351,23 @@ export default function Home() {
   }
 
   return (
-    <div className="space-y-4 px-2">
+    <div className="space-y-6">
+      {!session && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">✨</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-purple-800">Demo Mode - Dashboard</h3>
+              <p className="text-xs text-purple-700">
+                You're viewing demo sprint data and widgets. Sign in to access your personal dashboard with real project data.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Sprint Dashboard</h1>

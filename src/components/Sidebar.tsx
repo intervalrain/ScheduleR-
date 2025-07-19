@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useTaskRefresh } from "@/context/TaskContext";
+import { useSprint } from "@/context/SprintContext";
+import { getMockTasksByStatus } from "@/lib/mockData";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Task {
@@ -16,30 +18,26 @@ interface Task {
 export default function Sidebar() {
   const { data: session, status } = useSession();
   const { refreshTrigger } = useTaskRefresh();
+  const { selectedSprintId } = useSprint();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('IN_PROGRESS');
 
   useEffect(() => {
-    // Only fetch if user is authenticated
+    // Only fetch if user is authenticated and sprint is selected
     if (status === "loading") return; // Still loading
     if (!session) {
       // Not authenticated, use mock data
-      const allMockTasks: Task[] = [
-        { id: "task1", title: "Implement Login", status: "IN_PROGRESS" },
-        { id: "task2", title: "Design Database", status: "IN_PROGRESS" },
-        { id: "task3", title: "Setup CI/CD", status: "TODO" },
-        { id: "task4", title: "Write Tests", status: "REVIEW" },
-        { id: "task5", title: "Deploy to Production", status: "DONE" },
-      ];
-      const filteredMockTasks = allMockTasks.filter(task => task.status === selectedStatus);
-      setTasks(filteredMockTasks);
+      const mockTasks = getMockTasksByStatus(selectedStatus, selectedSprintId || undefined);
+      setTasks(mockTasks);
       return;
     }
 
     // Fetch tasks by status from API
     const fetchTasksByStatus = async (status: string) => {
+      if (!selectedSprintId) return;
+      
       try {
-        const response = await fetch(`/api/tasks?status=${status}`);
+        const response = await fetch(`/api/tasks?status=${status}&sprintId=${selectedSprintId}`);
         if (response.ok) {
           const fetchedTasks = await response.json();
           setTasks(fetchedTasks);
@@ -67,7 +65,7 @@ export default function Sidebar() {
     };
 
     fetchTasksByStatus(selectedStatus);
-  }, [session, status, refreshTrigger, selectedStatus]);
+  }, [session, status, selectedSprintId, refreshTrigger, selectedStatus]);
 
   // Handle status change
   const handleStatusChange = (newStatus: string) => {
