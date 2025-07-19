@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -79,6 +79,26 @@ export default function Home() {
       }
     }
   }, [session]);
+
+  const fetchTasksForSprint = useCallback(async (sprintId: string) => {
+    try {
+      if (!session) {
+        // Use mock data when not authenticated
+        const mockSprintTasks = getMockTasksBySprintId(sprintId);
+        console.log('Sprint switching: Loading', mockSprintTasks.length, 'tasks for sprint', sprintId);
+        setTasks(mockSprintTasks);
+        return;
+      }
+      
+      const response = await fetch(`/api/tasks?sprintId=${sprintId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error);
+    }
+  }, [session]);
   
   // Auto-scroll widget bar (4 widgets at a time)
   useEffect(() => {
@@ -103,7 +123,7 @@ export default function Home() {
     if (selectedSprint) {
       fetchTasksForSprint(selectedSprint.id);
     }
-  }, [selectedSprint, session]);
+  }, [selectedSprint, fetchTasksForSprint]);
 
   const fetchSprints = async () => {
     try {
@@ -118,7 +138,9 @@ export default function Home() {
           const end = new Date(sprint.endDate);
           return now >= start && now <= end;
         });
-        setSelectedSprint(activeSprint || mockSprints[0]);
+        const initialSprint = activeSprint || mockSprints[0];
+        console.log('Setting initial sprint:', initialSprint.name);
+        setSelectedSprint(initialSprint);
         return;
       }
       
@@ -141,25 +163,6 @@ export default function Home() {
       console.error("Failed to fetch sprints:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchTasksForSprint = async (sprintId: string) => {
-    try {
-      if (!session) {
-        // Use mock data when not authenticated
-        const mockSprintTasks = getMockTasksBySprintId(sprintId);
-        setTasks(mockSprintTasks);
-        return;
-      }
-      
-      const response = await fetch(`/api/tasks?sprintId=${sprintId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch tasks:", error);
     }
   };
 
@@ -332,6 +335,7 @@ export default function Home() {
             onValueChange={(value) => {
               const sprint = sprints.find(s => s.id === value);
               if (sprint) {
+                console.log('Sprint changed to:', sprint.name);
                 setSelectedSprint(sprint);
               }
             }}

@@ -119,7 +119,7 @@ export default function Header() {
           <Select 
             value={selectedSprintId || undefined} 
             onValueChange={setSelectedSprintId}
-            disabled={sprintsLoading || !session}
+            disabled={sprintsLoading}
           >
             <SelectTrigger className="w-[180px] border-border/60 bg-white hover:bg-muted/50 transition-colors">
               <SelectValue placeholder={sprintsLoading ? "Loading..." : "Select a sprint"} />
