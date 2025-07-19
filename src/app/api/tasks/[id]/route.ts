@@ -75,3 +75,79 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
   }
 }
+
+// DELETE /api/tasks/{id}
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // Check if user has permission to delete this task
+    const existingTask = await prisma.task.findUnique({
+      where: { id },
+      select: { 
+        createdById: true, 
+        assigneeId: true,
+        title: true
+      }
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    // Allow deletion if user is creator or assignee
+    if (existingTask.createdById !== user.id && existingTask.assigneeId !== user.id) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    // Delete related records first due to foreign key constraints
+    await prisma.$transaction(async (tx) => {
+      // Delete all subtasks
+      await tx.subTask.deleteMany({
+        where: { taskId: id }
+      });
+      
+      // Delete all notes
+      await tx.note.deleteMany({
+        where: { taskId: id }
+      });
+      
+      // Delete dependencies where this task is a dependency
+      await tx.dependency.deleteMany({
+        where: { dependsOnTaskId: id }
+      });
+      
+      // Delete the task's own dependencies
+      await tx.dependency.deleteMany({
+        where: { taskId: id }
+      });
+      
+      // Finally delete the task
+      await tx.task.delete({
+        where: { id }
+      });
+    });
+
+    return NextResponse.json({ 
+      message: "Task deleted successfully",
+      deletedTask: { id, title: existingTask.title }
+    });
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    return NextResponse.json({ error: 'Failed to delete task' }, { status: 500 });
+  }
+}

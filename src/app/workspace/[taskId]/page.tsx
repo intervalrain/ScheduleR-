@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DeleteTaskDialog } from "@/components/DeleteTaskDialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -118,6 +119,9 @@ export default function WorkspacePage() {
   
   // Activity tracking
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  
+  // Delete task state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (taskId && session) {
@@ -443,6 +447,15 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleDeleteTask = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleTaskDeleted = () => {
+    console.log('Task deleted, redirecting to kanban');
+    router.push('/kanban');
+  };
+
   if (!session) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -602,7 +615,18 @@ export default function WorkspacePage() {
               </div>
             ) : (
               <div>
-                <h1 className="text-3xl font-bold text-foreground">{task.title}</h1>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <h1 className="text-3xl font-bold text-foreground flex-1">{task.title}</h1>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteTask}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2Icon className="w-4 h-4 mr-2" />
+                    Delete Task
+                  </Button>
+                </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={getStatusColor(task.status) as any}>
                     {task.status.replace('_', ' ')}
@@ -1299,6 +1323,14 @@ export default function WorkspacePage() {
                 </div>
               </CardContent>
             </Card>
+
+      {/* Delete Task Dialog */}
+      <DeleteTaskDialog
+        isOpen={deleteDialogOpen}
+        setIsOpen={setDeleteDialogOpen}
+        task={task ? { id: task.id, title: task.title } : null}
+        onTaskDeleted={handleTaskDeleted}
+      />
     </div>
   );
 }

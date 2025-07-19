@@ -17,38 +17,51 @@ interface Task {
 
 export default function Sidebar() {
   const { data: session, status } = useSession();
-  const { refreshTrigger } = useTaskRefresh();
+  const { refreshTrigger, deletedTaskIds } = useTaskRefresh();
   const { selectedSprintId } = useSprint();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('IN_PROGRESS');
 
+  // Filter out deleted tasks from the current task list
+  const filteredTasks = tasks.filter(task => !deletedTaskIds.includes(task.id));
+
   useEffect(() => {
     // Only fetch if user is authenticated and sprint is selected
     if (status === "loading") return; // Still loading
-    if (!session) {
-      // Not authenticated, use mock data
-      const mockTasks = getMockTasksByStatus(selectedStatus, selectedSprintId || undefined);
-      setTasks(mockTasks);
-      return;
-    }
+    
+    const fetchTasks = async () => {
+      if (!session) {
+        // Not authenticated, use mock data
+        const mockTasks = getMockTasksByStatus(selectedStatus, selectedSprintId || undefined);
+        setTasks(mockTasks);
+        return;
+      }
 
-    // Fetch tasks by status from API
-    const fetchTasksByStatus = async (status: string) => {
+      // Fetch tasks by status from API
       if (!selectedSprintId) return;
       
       try {
-        const response = await fetch(`/api/tasks?status=${status}&sprintId=${selectedSprintId}`);
+        console.log('Sidebar: Fetching tasks for status:', selectedStatus, 'sprint:', selectedSprintId, 'trigger:', refreshTrigger);
+        const response = await fetch(`/api/tasks?status=${selectedStatus}&sprintId=${selectedSprintId}`, {
+          // Add cache busting to ensure fresh data
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+          }
+        });
+        
         if (response.ok) {
           const fetchedTasks = await response.json();
+          console.log('Sidebar: Fetched tasks:', fetchedTasks.length);
           setTasks(fetchedTasks);
         } else {
           const errorText = await response.text();
           console.error('Failed to fetch tasks:', response.status, errorText);
           // Fallback to mock data
           const mockTasks: Task[] = [
-            { id: "task1", title: "Implement Login", status },
-            { id: "task2", title: "Design Database", status },
-            { id: "task3", title: "Setup CI/CD", status },
+            { id: "task1", title: "Implement Login", status: selectedStatus },
+            { id: "task2", title: "Design Database", status: selectedStatus },
+            { id: "task3", title: "Setup CI/CD", status: selectedStatus },
           ];
           setTasks(mockTasks);
         }
@@ -56,15 +69,15 @@ export default function Sidebar() {
         console.error('Error fetching tasks:', error);
         // Fallback to mock data
         const mockTasks: Task[] = [
-          { id: "task1", title: "Implement Login", status },
-          { id: "task2", title: "Design Database", status },
-          { id: "task3", title: "Setup CI/CD", status },
+          { id: "task1", title: "Implement Login", status: selectedStatus },
+          { id: "task2", title: "Design Database", status: selectedStatus },
+          { id: "task3", title: "Setup CI/CD", status: selectedStatus },
         ];
         setTasks(mockTasks);
       }
     };
 
-    fetchTasksByStatus(selectedStatus);
+    fetchTasks();
   }, [session, status, selectedSprintId, refreshTrigger, selectedStatus]);
 
   // Handle status change
@@ -142,7 +155,7 @@ export default function Sidebar() {
         <Droppable droppableId="sidebar-tasks">
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-              {tasks.map((task, index) => (
+              {filteredTasks.map((task, index) => (
                 <Draggable key={task.id} draggableId={task.id} index={index}>
                   {(provided) => (
                     <Link href={`/workspace/${task.id}`}>

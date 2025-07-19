@@ -382,9 +382,10 @@ interface WeekViewProps {
   onRangeSelected: (range: { startTime: Date; endTime: Date }) => void;
   onBusyHourDeleted: () => void;
   categories: {id: string; name: string; color: string}[];
+  isReadOnly: boolean;
 }
 
-function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRangeSelected, onBusyHourDeleted, categories }: WeekViewProps) {
+function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRangeSelected, onBusyHourDeleted, categories, isReadOnly }: WeekViewProps) {
   const { workHours, show24Hours, weekStartsOn } = userSettings;
   const [selection, setSelection] = useState<{ day: Date; startTime: string; endTime: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -415,7 +416,6 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
   const isWithinSprint = (day: Date) => {
     if (!currentSprint) return false;
     const sprintStart = new Date(currentSprint.startDate);
-
     sprintStart.setDate(sprintStart.getDate() - 1);
     const sprintEnd = new Date(currentSprint.endDate);
     return day >= sprintStart && day <= sprintEnd;
@@ -916,9 +916,10 @@ interface MonthViewProps {
   busyHours: BusyHour[];
   sprints: Sprint[];
   onDayClick: (date: Date) => void;
+  isReadOnly: boolean;
 }
 
-function MonthView({ currentDate, userSettings, busyHours, sprints, onDayClick }: MonthViewProps) {
+function MonthView({ currentDate, userSettings, busyHours, sprints, onDayClick, isReadOnly }: MonthViewProps) {
   const { weekStartsOn } = userSettings;
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);

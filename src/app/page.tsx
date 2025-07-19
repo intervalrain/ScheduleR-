@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, differenceInDays, isPast } from "date-fns";
 import { useSession } from "next-auth/react";
-import { mockSprints, mockTasks, getMockTasksBySprintId } from "@/lib/mockData";
+import { getMockTasksBySprintId } from "@/lib/mockData";
+import { useSprint } from "@/context/SprintContext";
 import { EditSprintDialog } from "@/components/EditSprintDialog";
 import { CalendarIcon, EditIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, BarChart3Icon, HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, GitBranchIcon, MessageSquareIcon, FileTextIcon, TargetIcon, TrendingDownIcon } from "lucide-react";
 
@@ -38,10 +39,8 @@ interface WidgetConfig {
 }
 
 export default function Home() {
-  const [sprints, setSprints] = useState<Sprint[]>([]);
-  const [selectedSprint, setSelectedSprint] = useState<Sprint | null>(null);
+  const { selectedSprint, loading: sprintLoading, refreshSprints } = useSprint();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [enabledWidgets, setEnabledWidgets] = useState<WidgetConfig[]>([]);
   const [currentWidgetIndex, setCurrentWidgetIndex] = useState(0);
@@ -50,9 +49,6 @@ export default function Home() {
   const { data: session } = useSession();
 
   useEffect(() => {
-    // Always fetch sprints, regardless of session status
-    fetchSprints();
-    
     // Load enabled widgets from localStorage
     if (typeof window !== "undefined") {
       const savedWidgets = localStorage.getItem("enabledWidgets");
@@ -78,7 +74,7 @@ export default function Home() {
         setEnabledWidgets(defaultWidgets);
       }
     }
-  }, [session]);
+  }, []);
 
   const fetchTasksForSprint = useCallback(async (sprintId: string) => {
     try {
@@ -124,47 +120,6 @@ export default function Home() {
       fetchTasksForSprint(selectedSprint.id);
     }
   }, [selectedSprint, fetchTasksForSprint]);
-
-  const fetchSprints = async () => {
-    try {
-      setLoading(true);
-      
-      if (!session) {
-        // Use mock data when not authenticated
-        setSprints(mockSprints);
-        const now = new Date();
-        const activeSprint = mockSprints.find((sprint) => {
-          const start = new Date(sprint.startDate);
-          const end = new Date(sprint.endDate);
-          return now >= start && now <= end;
-        });
-        const initialSprint = activeSprint || mockSprints[0];
-        console.log('Setting initial sprint:', initialSprint.name);
-        setSelectedSprint(initialSprint);
-        return;
-      }
-      
-      const response = await fetch("/api/sprints");
-      if (response.ok) {
-        const data = await response.json();
-        setSprints(data);
-        if (data.length > 0) {
-          // Find current active sprint or use the first one
-          const now = new Date();
-          const activeSprint = data.find((sprint: Sprint) => {
-            const start = new Date(sprint.startDate);
-            const end = new Date(sprint.endDate);
-            return now >= start && now <= end;
-          });
-          setSelectedSprint(activeSprint || data[0]);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch sprints:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEditSprint = () => {
     if (selectedSprint) {
@@ -292,7 +247,7 @@ export default function Home() {
     setCurrentWidgetIndex(index);
   };
 
-  if (loading) {
+  if (sprintLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -321,37 +276,11 @@ export default function Home() {
         </div>
       )}
       
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Sprint Dashboard</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Monitor and manage your current sprint progress
-          </p>
-        </div>
-        
-        {sprints.length > 1 && (
-          <Select 
-            value={selectedSprint?.id || ''} 
-            onValueChange={(value) => {
-              const sprint = sprints.find(s => s.id === value);
-              if (sprint) {
-                console.log('Sprint changed to:', sprint.name);
-                setSelectedSprint(sprint);
-              }
-            }}
-          >
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Select sprint" />
-            </SelectTrigger>
-            <SelectContent>
-              {sprints.map((sprint) => (
-                <SelectItem key={sprint.id} value={sprint.id}>
-                  {sprint.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Sprint Dashboard</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Monitor and manage your current sprint progress
+        </p>
       </div>
 
       {selectedSprint ? (
@@ -561,7 +490,7 @@ export default function Home() {
             sprint={selectedSprint}
             isOpen={editDialogOpen}
             setIsOpen={setEditDialogOpen}
-            onSprintUpdated={fetchSprints}
+            onSprintUpdated={refreshSprints}
           />
         </>
       ) : (

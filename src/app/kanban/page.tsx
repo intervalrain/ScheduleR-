@@ -10,13 +10,21 @@ import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClockIcon, UserIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DeleteTaskDialog } from "@/components/DeleteTaskDialog";
+import { ClockIcon, UserIcon, Trash2Icon, MoreVerticalIcon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface User {
   id: string;
   name: string;
   email: string;
-  image?: string;
+  image?: string | null;
 }
 
 interface Task {
@@ -35,10 +43,15 @@ interface Task {
 export default function KanbanPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const { refreshTrigger, triggerRefresh } = useTaskRefresh();
+  const { refreshTrigger, triggerRefresh, deletedTaskIds } = useTaskRefresh();
   const { selectedSprintId } = useSprint();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<{id: string, title: string} | null>(null);
+
+  // Filter out deleted tasks
+  const filteredTasks = tasks.filter(task => !deletedTaskIds.includes(task.id));
 
   useEffect(() => {
     if (selectedSprintId) {
@@ -257,7 +270,7 @@ export default function KanbanPage() {
   };
 
   const getTasksByStatus = (status: string) => {
-    return tasks
+    return filteredTasks
       .filter((task) => task.status === status)
       .sort((a, b) => (a.priority || 1000000) - (b.priority || 1000000));
   };
@@ -278,6 +291,17 @@ export default function KanbanPage() {
     
     console.log('Kanban: Task clicked:', taskId, 'Type:', typeof taskId);
     router.push(`/workspace/${taskId}`);
+  };
+
+  const handleDeleteTask = (task: Task) => {
+    setTaskToDelete({ id: task.id, title: task.title });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleTaskDeleted = () => {
+    console.log('Task deleted, refreshing task list');
+    triggerRefresh();
+    fetchTasks();
   };
 
   // Remove early return for !session to allow demo mode
@@ -312,7 +336,7 @@ export default function KanbanPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Kanban Board</h1>
         <div className="text-sm text-muted-foreground">
-          {tasks.length} task{tasks.length !== 1 ? 's' : ''} total
+          {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} total
         </div>
       </div>
       
@@ -366,15 +390,43 @@ export default function KanbanPage() {
                             >
                               <CardContent className="p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
-                                  <h3 className="font-medium leading-tight">{task.title}</h3>
-                                  {task.priority && task.priority < 700000 && (
-                                    <Badge 
-                                      variant={getPriorityColor(task.priority) as 'default' | 'destructive' | 'secondary' | 'outline'}
-                                      className="text-xs shrink-0"
-                                    >
-                                      High Priority
-                                    </Badge>
-                                  )}
+                                  <h3 className="font-medium leading-tight flex-1">{task.title}</h3>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {task.priority && task.priority < 700000 && (
+                                      <Badge 
+                                        variant={getPriorityColor(task.priority) as 'default' | 'destructive' | 'secondary' | 'outline'}
+                                        className="text-xs"
+                                      >
+                                        High Priority
+                                      </Badge>
+                                    )}
+                                    {session && (
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-6 w-6 p-0 hover:bg-muted"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <MoreVerticalIcon className="h-3 w-3" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-32">
+                                          <DropdownMenuItem 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteTask(task);
+                                            }}
+                                            className="text-destructive focus:text-destructive"
+                                          >
+                                            <Trash2Icon className="h-3 w-3 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    )}
+                                  </div>
                                 </div>
                                 
                                 {task.description && (
@@ -449,6 +501,14 @@ export default function KanbanPage() {
           })}
         </div>
       </DragDropContext>
+
+      {/* Delete Task Dialog */}
+      <DeleteTaskDialog
+        isOpen={deleteDialogOpen}
+        setIsOpen={setDeleteDialogOpen}
+        task={taskToDelete}
+        onTaskDeleted={handleTaskDeleted}
+      />
     </div>
   );
 }
