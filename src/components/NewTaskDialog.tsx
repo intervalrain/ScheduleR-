@@ -223,10 +223,10 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="TODO">📋 To Do</SelectItem>
-                <SelectItem value="IN_PROGRESS">⚡ In Progress</SelectItem>
-                <SelectItem value="REVIEW">👀 Review</SelectItem>
                 <SelectItem value="DONE">✅ Done</SelectItem>
+                <SelectItem value="REVIEW">👀 Review</SelectItem>
+                <SelectItem value="IN_PROGRESS">⚡ In Progress</SelectItem>
+                <SelectItem value="TODO">📋 To Do</SelectItem>
               </SelectContent>
             </Select>
           </div>

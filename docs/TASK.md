@@ -12,34 +12,34 @@
 
 ### 💡 用戶擴展需求 (高優先級)
 
-#### F1. Sprint 類型管理
+#### F1. Sprint 類型管理 - ✅ **已完成**
 **目標**: 支援專案管理 (PROJECT) 和日常管理 (CASUAL) 兩種模式
 
-- [ ] **資料庫擴展** (1-2天)
-  - 添加 Sprint.type 欄位 (enum: 'PROJECT', 'CASUAL')
-  - 添加 Sprint.defaultWorkDays 欄位 (JSON)
-  - 添加 Sprint.defaultWorkHours 欄位 (JSON)
-  - 建立 migration script 更新現有資料
+- [x] **資料庫擴展** ✅ **已完成**
+  - [x] 添加 Sprint.type 欄位 (enum: 'PROJECT', 'CASUAL')
+  - [x] 添加 Sprint.defaultWorkDays 欄位 (JSON)
+  - [x] 添加 Sprint.defaultWorkHours 欄位 (JSON)
+  - [x] 建立 migration script 更新現有資料
 
-- [ ] **API 修改** (2-3天)
-  - 更新 `POST /api/sprints` 支援類型選擇
-  - PROJECT: 預設週一-五，8:30-17:30
-  - CASUAL: 預設週一-日，全天候
-  - 更新 `PUT /api/sprints/{id}` 支援工作時間自訂
+- [x] **API 修改** ✅ **已完成**
+  - [x] 更新 `POST /api/sprints` 支援類型選擇
+  - [x] PROJECT: 預設週一-五，8:30-17:30
+  - [x] CASUAL: 預設週一-日，全天候
+  - [x] 更新 `PATCH /api/sprints/{id}` 支援工作時間自訂
 
-- [ ] **前端實作** (3-4天)
-  - Sprint 創建表單添加類型選擇器
-  - 工作時間設定預覽和自訂
-  - Sprint 管理頁面顯示類型資訊
+- [x] **前端實作** ✅ **已完成**
+  - [x] Sprint 創建表單添加類型選擇器
+  - [x] 工作時間設定預覽和自訂
+  - [x] Sprint 管理頁面顯示類型資訊
 
 #### F2. Gantt 模式管理
 **目標**: 支援自動排程 (Auto) 和手動拖拽 (Manual) 兩種模式
 
-**Auto Mode** - ✅ 95% 完成
+**Auto Mode** - ✅ **已完成**
 - [x] 雙指針排程演算法
 - [x] 工作時間計算
 - [x] 依賴關係處理
-- [ ] 根據 Sprint 類型調整排程邏輯 (1-2天)
+- [x] 根據 Sprint 類型調整排程邏輯 ✅ **已完成**
 
 **Manual Mode** - ❌ 未實作
 - [ ] **拖拽功能** (1-2週)
@@ -95,6 +95,14 @@
 9. **Sprint Progress** - Sprint 進度 ✅ **(新增)**
    - 數據源: Sprint 時間進度
    - 顯示: 經過天數/總天數
+
+#### ✅ Dashboard 功能特性 (已實作)
+- **Widget 拖拽重排** ✅ **(2025-07-19 完成)**
+  - 技術實作: `@hello-pangea/dnd`
+  - 功能: 任意拖拽 widgets 重新排序
+  - 視覺回饋: 拖拽時縮放、旋轉、陰影效果
+  - 持久化: localStorage 保存用戶偏好順序
+  - 響應式: 支援 1-4 欄位自適應佈局
 
 #### 🟡 可基於現有數據完成 (未實作)
 10. **Team Member Tasks** - 團隊成員任務 (3-4天)
@@ -343,9 +351,10 @@
 **焦點**: 關鍵 Bug 修復 + 快速增值功能
 
 1. **B1**: Priority 系統修復 (Critical Bug) - ✅ **已完成**
-2. **F1**: Sprint 類型選擇實作
-3. **F2**: Gantt Auto Mode 優化
-4. **Widgets**: Progress Chart, Task Distribution (簡單 widgets)
+2. **F1**: Sprint 類型選擇實作 - ✅ **已完成**
+3. **F2**: Gantt Auto Mode 優化 - ✅ **已完成**
+4. **Dashboard Drag & Drop**: Widget 拖拽重排功能 - ✅ **已完成**
+5. **Widgets**: Progress Chart, Task Distribution (簡單 widgets)
 
 ### Phase 2: 短期執行 (3-4週)
 **焦點**: 核心功能完善 + 測試覆蓋
@@ -376,7 +385,7 @@
 
 ## 🎯 關鍵里程碑
 
-- **Week 2**: ✅ Priority Bug 修復完成 + Sprint 類型功能進行中
+- **Week 2**: ✅ Priority Bug 修復完成 + Sprint 類型功能完成 + Gantt Auto Mode 完成 + Dashboard Drag & Drop 完成
 - **Week 4**: Gantt Manual Mode MVP + 記憶體洩漏修復
 - **Week 8**: API 測試覆蓋 60% + 6個基礎 Widgets 完成
 - **Week 12**: 前端測試覆蓋 70% + 程式碼重構完成
@@ -435,6 +444,7 @@
 ### 當前完成度
 - **核心功能**: 95% 完成
 - **Dashboard Widgets**: 45% 完成 (9/20 widgets) ✅ **更新**
+- **Dashboard 功能**: 完整拖拽重排功能 ✅ **2025-07-19 完成**
 - **測試覆蓋**: 5% 完成
 - **程式碼品質**: 良好，但有改進空間
 - **Widget 選擇器**: 已實作，支援 disabled 狀態和 preview 模式 ✅ **新增**

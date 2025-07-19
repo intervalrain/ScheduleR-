@@ -10,6 +10,7 @@ import { getMockTasksBySprintId, mockBusyHours } from "@/lib/mockData";
 import { useSprint } from "@/context/SprintContext";
 import { EditSprintDialog } from "@/components/EditSprintDialog";
 import { WidgetSelector } from "@/components/WidgetSelector";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { CalendarIcon, EditIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, BarChart3Icon, HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, GitBranchIcon, MessageSquareIcon, FileTextIcon, TargetIcon, TrendingDownIcon, SettingsIcon } from "lucide-react";
 
 interface Sprint {
@@ -74,14 +75,14 @@ export default function Home() {
           console.error('Error parsing saved widgets:', e);
         }
       } else {
-        // Default enabled widgets
+        // Default enabled widgets (ordered by priority)
         const defaultWidgets = [
-          { id: "completion-rate" },
           { id: "task-summary" },
-          { id: "hours-summary" },
+          { id: "completion-rate" },
           { id: "work-hours" },
-          { id: "sprint-health" },
           { id: "progress-chart" },
+          { id: "hours-summary" },
+          { id: "sprint-health" },
           { id: "team-workload" }
         ];
         setEnabledWidgets(defaultWidgets);
@@ -385,6 +386,34 @@ export default function Home() {
     }
   };
 
+  const handleWidgetDragEnd = (result: any) => {
+    console.log('Drag ended:', result);
+    
+    if (!result.destination) {
+      console.log('No destination, drag cancelled');
+      return;
+    }
+
+    if (result.source.index === result.destination.index) {
+      console.log('Same position, no change needed');
+      return;
+    }
+
+    const items = Array.from(enabledWidgets);
+    console.log('Before reorder:', items.map(w => w.id));
+    
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    
+    console.log('After reorder:', items.map(w => w.id));
+
+    setEnabledWidgets(items);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("enabledWidgets", JSON.stringify(items));
+      console.log('Saved to localStorage:', items.map(w => w.id));
+    }
+  };
+
   if (sprintLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -537,58 +566,61 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="relative overflow-hidden">
-                  <div 
-                    className="flex transition-transform duration-500 ease-in-out"
-                    style={{ transform: `translateX(-${currentWidgetIndex * 100}%)` }}
-                  >
-                    {Array.from({ length: Math.ceil(widgetData.length / 4) }, (_, pageIndex) => (
-                      <div key={pageIndex} className="w-full flex-shrink-0">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          {widgetData
-                            .slice(pageIndex * 4, (pageIndex + 1) * 4)
-                            .map((widget) => (
-                              <Card key={widget.id} className="text-center">
-                                <CardContent className="p-4">
-                                  <div className="flex items-center justify-center gap-2 mb-2">
-                                    <div className={widget.color}>
-                                      {widget.icon}
-                                    </div>
-                                    <h3 className="text-sm font-medium text-muted-foreground">
-                                      {widget.title}
-                                    </h3>
-                                  </div>
-                                  <div className={`text-2xl font-bold mb-1 ${widget.color}`}>
-                                    {widget.value}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {widget.description}
-                                  </p>
-                                </CardContent>
-                              </Card>
-                            ))}
-                        </div>
+                <DragDropContext onDragEnd={handleWidgetDragEnd}>
+                  <Droppable droppableId="widgets">
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+                      >
+                        {enabledWidgets.map((widgetConfig, index) => {
+                          const widget = widgetData.find(w => w.id === widgetConfig.id);
+                          if (!widget) return null;
+                          
+                          return (
+                            <Draggable key={widget.id} draggableId={widget.id} index={index}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={`transition-all duration-200 ${
+                                    snapshot.isDragging ? 'scale-105 rotate-3 z-50' : ''
+                                  }`}
+                                >
+                                  <Card className={`text-center cursor-move ${
+                                    snapshot.isDragging 
+                                      ? 'shadow-lg ring-2 ring-primary/50' 
+                                      : 'hover:shadow-md'
+                                  }`}>
+                                    <CardContent className="p-4">
+                                      <div className="flex items-center justify-center gap-2 mb-2">
+                                        <div className={widget.color}>
+                                          {widget.icon}
+                                        </div>
+                                        <h3 className="text-sm font-medium text-muted-foreground">
+                                          {widget.title}
+                                        </h3>
+                                      </div>
+                                      <div className={`text-2xl font-bold mb-1 ${widget.color}`}>
+                                        {widget.value}
+                                      </div>
+                                      <p className="text-xs text-muted-foreground">
+                                        {widget.description}
+                                      </p>
+                                    </CardContent>
+                                  </Card>
+                                </div>
+                              )}
+                            </Draggable>
+                          );
+                        })}
+                        {provided.placeholder}
                       </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Page indicators */}
-                {Math.ceil(widgetData.length / 4) > 1 && (
-                  <div className="flex justify-center gap-2 mt-4">
-                    {Array.from({ length: Math.ceil(widgetData.length / 4) }, (_, pageIndex) => (
-                      <button
-                        key={pageIndex}
-                        onClick={() => handleWidgetClick(pageIndex)}
-                        className={`w-2 h-2 rounded-full transition-all ${
-                          pageIndex === currentWidgetIndex 
-                            ? 'bg-primary' 
-                            : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
+                    )}
+                  </Droppable>
+                </DragDropContext>
               </CardContent>
             </Card>
           )}
@@ -598,17 +630,8 @@ export default function Home() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-500 mb-1">{todoTasks}</div>
-                  <div className="text-sm text-muted-foreground">📋 Pending</div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600 mb-1">{inProgressTasks}</div>
-                  <div className="text-sm text-muted-foreground">⚡ In Progress</div>
+                  <div className="text-2xl font-bold text-green-600 mb-1">{completedTasks}</div>
+                  <div className="text-sm text-muted-foreground">✅ Done</div>
                 </div>
               </CardContent>
             </Card>
@@ -625,8 +648,17 @@ export default function Home() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 mb-1">{completedTasks}</div>
-                  <div className="text-sm text-muted-foreground">✅ Done</div>
+                  <div className="text-2xl font-bold text-blue-600 mb-1">{inProgressTasks}</div>
+                  <div className="text-sm text-muted-foreground">⚡ In Progress</div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-500 mb-1">{todoTasks}</div>
+                  <div className="text-sm text-muted-foreground">📋 Pending</div>
                 </div>
               </CardContent>
             </Card>

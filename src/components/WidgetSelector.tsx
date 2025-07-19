@@ -15,7 +15,7 @@ import {
   TrendingUpIcon, CheckCircleIcon, ClockIcon, BarChart3Icon, 
   HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, 
   GitBranchIcon, CalendarIcon, TargetIcon, TrendingDownIcon,
-  LockIcon, FlaskIcon
+  LockIcon, BeakerIcon
 } from "lucide-react";
 
 interface Widget {
@@ -194,7 +194,7 @@ export function WidgetSelector({ isOpen, setIsOpen, enabledWidgets, onSave }: Wi
       case 'completed':
         return <Badge variant="default" className="text-xs">Available</Badge>;
       case 'preview':
-        return <Badge variant="secondary" className="text-xs"><FlaskIcon className="w-3 h-3 mr-1" />Preview Only</Badge>;
+        return <Badge variant="secondary" className="text-xs"><BeakerIcon className="w-3 h-3 mr-1" />Preview Only</Badge>;
       case 'future':
         return <Badge variant="outline" className="text-xs"><LockIcon className="w-3 h-3 mr-1" />Coming Soon</Badge>;
       default:

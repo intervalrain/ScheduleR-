@@ -37,8 +37,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navigationTabs = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },
   { id: "kanban", label: "Kanban", href: "/kanban", icon: Columns3Icon },
-  { id: "calendar", label: "Calendar", href: "/calendar", icon: CalendarIcon },
   { id: "gantt", label: "Gantt", href: "/gantt", icon: BarChart3Icon },
+  { id: "calendar", label: "Calendar", href: "/calendar", icon: CalendarIcon },
   { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon },
 ];
 

@@ -6,8 +6,10 @@ import { SessionProvider } from "next-auth/react";
 import { NewTaskDialogProvider, useNewTaskDialog } from "@/components/NewTaskDialogProvider";
 import { TaskProvider } from "@/context/TaskContext";
 import { SprintProvider } from "@/context/SprintContext";
+import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
 import { useHotkeys } from "react-hotkeys-hook";
 import { CommandPalette } from "@/components/CommandPalette";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 
@@ -29,22 +31,33 @@ const geistMono = Geist_Mono({
 
 function AppProviders({ children }: { children: React.ReactNode }) {
   const { openNewTaskDialog } = useNewTaskDialog();
+  const { toggleSidebar, isCollapsed } = useSidebar();
 
   useHotkeys("mod+n", () => {
     openNewTaskDialog();
   });
 
+  useHotkeys("mod+b", () => {
+    toggleSidebar();
+  });
+
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <div className="flex min-h-[calc(100vh-120px)]">
-        <Sidebar />
-        <main className="flex-1 p-8 bg-background">
-          {children}
-        </main>
+    <TooltipProvider>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex min-h-[calc(100vh-120px)]">
+          <Sidebar />
+          <main 
+            className={`flex-1 p-8 bg-background transition-all duration-300 ${
+              isCollapsed ? 'ml-0' : ''
+            }`}
+          >
+            {children}
+          </main>
+        </div>
+        <CommandPalette />
       </div>
-      <CommandPalette />
-    </div>
+    </TooltipProvider>
   );
 }
 
@@ -61,9 +74,11 @@ export default function RootLayout({
         <SessionProvider>
           <SprintProvider>
             <TaskProvider>
-              <NewTaskDialogProvider>
-                <AppProviders>{children}</AppProviders>
-              </NewTaskDialogProvider>
+              <SidebarProvider>
+                <NewTaskDialogProvider>
+                  <AppProviders>{children}</AppProviders>
+                </NewTaskDialogProvider>
+              </SidebarProvider>
             </TaskProvider>
           </SprintProvider>
         </SessionProvider>

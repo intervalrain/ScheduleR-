@@ -11,6 +11,7 @@ import { Chart } from "react-google-charts";
 import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData";
 import { useSession } from "next-auth/react";
 import { addDays, differenceInDays, format } from "date-fns";
+import { useSidebar } from "@/context/SidebarContext";
 
 interface Task {
   id: string;
@@ -47,6 +48,7 @@ export default function GanttPage() {
   const { refreshTrigger } = useTaskRefresh();
   const { selectedSprint, selectedSprintId } = useSprint();
   const { data: session } = useSession();
+  const { isCollapsed } = useSidebar();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +61,15 @@ export default function GanttPage() {
   // Update work settings when selected sprint changes
   useEffect(() => {
     if (selectedSprint?.defaultWorkDays && selectedSprint?.defaultWorkHours) {
+      // Use Sprint's work configuration based on Sprint type
+      console.log(`Using Sprint work configuration: ${selectedSprint.type || 'PROJECT'} type`);
       setUserSettings({
         workDays: selectedSprint.defaultWorkDays,
         workHours: selectedSprint.defaultWorkHours
       });
     } else {
       // Fall back to user settings if Sprint doesn't have settings
+      console.log('Falling back to user work settings');
       fetchUserSettings();
     }
   }, [selectedSprint]);
@@ -227,6 +232,10 @@ export default function GanttPage() {
     const sprintStartDate = new Date(selectedSprint.startDate);
     const sprintEndDate = new Date(selectedSprint.endDate);
     
+    console.log(`\n=== Gantt Auto Scheduling for ${selectedSprint.type || 'PROJECT'} Sprint ===`);
+    console.log(`Sprint: ${selectedSprint.name} (${format(sprintStartDate, 'yyyy-MM-dd')} to ${format(sprintEndDate, 'yyyy-MM-dd')})`);
+    console.log(`Work configuration - Days: [${userSettings.workDays.join(',')}], Hours: ${userSettings.workHours.start}-${userSettings.workHours.end}`);
+    
     // Sort tasks by status priority (DONE > REVIEW > IN_PROGRESS > TODO) then by priority (high to low)
     const sortedTasks = [...tasks].sort((a, b) => {
       const statusOrder = { 'DONE': 1, 'REVIEW': 2, 'IN_PROGRESS': 3, 'TODO': 4 };
@@ -285,12 +294,13 @@ export default function GanttPage() {
     const workBlocks = generateWorkBlocks();
     
     // Debug logging
-    console.log('Work blocks generated:', workBlocks.map(b => ({
+    console.log(`Generated ${workBlocks.length} work blocks for ${selectedSprint.type || 'PROJECT'} Sprint:`);
+    console.log('Work blocks:', workBlocks.slice(0, 5).map(b => ({
       date: format(b.date, 'yyyy-MM-dd'),
       start: `${Math.floor(b.startMinutes / 60)}:${String(b.startMinutes % 60).padStart(2, '0')}`,
       end: `${Math.floor(b.endMinutes / 60)}:${String(b.endMinutes % 60).padStart(2, '0')}`,
       hours: b.availableHours
-    })));
+    })), workBlocks.length > 5 ? `... and ${workBlocks.length - 5} more` : '');
 
     const scheduledTasks = [];
 
@@ -739,7 +749,7 @@ export default function GanttPage() {
         </Card>
       )}
 
-      <div className="w-full" style={{ maxWidth: 'calc(100vw - 20rem)' }}>
+      <div className="w-full" style={{ maxWidth: isCollapsed ? 'calc(100vw - 4rem)' : 'calc(100vw - 20rem)' }}>
         <Card className="w-full overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

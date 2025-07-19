@@ -495,6 +495,7 @@ export default function WorkspacePage() {
     switch (status) {
       case "TODO": return "default";
       case "IN_PROGRESS": return "secondary";
+      case "REVIEW": return "secondary";
       case "DONE": return "outline";
       default: return "default";
     }
@@ -555,9 +556,10 @@ export default function WorkspacePage() {
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="TODO">To Do</SelectItem>
-                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                         <SelectItem value="DONE">Done</SelectItem>
+                        <SelectItem value="REVIEW">Review</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="TODO">To Do</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
