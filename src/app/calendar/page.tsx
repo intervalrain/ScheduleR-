@@ -461,7 +461,14 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
           // Update the dragged block position visually
           const draggedElement = document.querySelector(`[data-block-id="${draggedBlock.id}"]`);
           if (draggedElement) {
-            (draggedElement as HTMLElement).style.transform = `translate(${x - (dragOffset?.x || 0)}px, ${y - (dragOffset?.y || 0)}px)`;
+            // Calculate movement delta since drag started
+            const deltaX = e.clientX - (dragOffset?.x || 0);
+            const deltaY = e.clientY - (dragOffset?.y || 0);
+            
+            // Apply the delta as a transform to maintain original layout position
+            (draggedElement as HTMLElement).style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            (draggedElement as HTMLElement).style.zIndex = '1000';
+            (draggedElement as HTMLElement).style.pointerEvents = 'none'; // Prevent interference
           }
         }
       }
@@ -538,10 +545,17 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
     event.stopPropagation();
     event.preventDefault();
     
-    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    // Get the calendar container for consistent positioning
+    const calendarContainer = document.querySelector('.grid.grid-cols-8');
+    if (!calendarContainer) return;
+    
+    const containerRect = calendarContainer.getBoundingClientRect();
+    const elementRect = (event.target as HTMLElement).getBoundingClientRect();
+    
+    // Calculate offset relative to the calendar container
     setDragOffset({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
+      x: event.clientX,  // Store absolute mouse position
+      y: event.clientY   // Store absolute mouse position
     });
     setDraggedBlock(block);
     setIsDraggingBlock(true);
@@ -557,10 +571,12 @@ function WeekView({ currentDate, userSettings, busyHours, currentSprint, onRange
 
   const handleBlockMouseUp = async () => {
     if (isDraggingBlock && draggedBlock) {
-      // Reset the transform on the dragged element
+      // Reset the transform and other styles on the dragged element
       const draggedElement = document.querySelector(`[data-block-id="${draggedBlock.id}"]`);
       if (draggedElement) {
         (draggedElement as HTMLElement).style.transform = '';
+        (draggedElement as HTMLElement).style.zIndex = '';
+        (draggedElement as HTMLElement).style.pointerEvents = '';
       }
 
       // Here we would calculate the new date/time and update via API
