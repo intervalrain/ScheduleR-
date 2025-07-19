@@ -182,14 +182,12 @@ export default function Header() {
         
         {/* Right section */}
         <div className="flex items-center gap-3 justify-end">
-          {session && (
-            <Button 
-              onClick={() => openNewTaskDialog(selectedSprintId || undefined)} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-medium"
-            >
-              New Task
-            </Button>
-          )}
+          <Button 
+            onClick={() => openNewTaskDialog(selectedSprintId || undefined)} 
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-medium"
+          >
+            New Task
+          </Button>
           
           {/* User Menu */}
           {status === "loading" ? (

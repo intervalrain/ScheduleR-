@@ -60,6 +60,12 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Disable creation when not authenticated
+    if (!session) {
+      console.log('Not authenticated, sprint creation disabled');
+      return;
+    }
+    
     if (!name.trim()) {
       setError("Sprint name is required");
       return;
@@ -134,9 +140,6 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
     }
   };
 
-  if (!session) {
-    return null;
-  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -152,6 +155,22 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
             </DialogDescription>
           </DialogHeader>
           
+          {!session && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">!</span>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-amber-800">Preview Mode</h4>
+                  <p className="text-xs text-amber-700">
+                    You're viewing the sprint creation form. Sign in to create actual sprints.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
               {error}
@@ -166,7 +185,7 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Sprint 1, Development Sprint"
-                disabled={isLoading}
+                disabled={isLoading || !session}
               />
             </div>
             
@@ -175,8 +194,9 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
                 <Label htmlFor="startDate">Start Date</Label>
                 <DatePicker 
                   date={startDate}
-                  onDateChange={setStartDate}
+                  onDateChange={session ? setStartDate : () => {}}
                   placeholder="Select start date"
+                  disabled={!session}
                 />
               </div>
               
@@ -184,8 +204,9 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
                 <Label htmlFor="endDate">End Date</Label>
                 <DatePicker 
                   date={endDate}
-                  onDateChange={setEndDate}
+                  onDateChange={session ? setEndDate : () => {}}
                   placeholder="Select end date"
+                  disabled={!session}
                 />
               </div>
             </div>
@@ -193,7 +214,7 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="sprintType">Sprint Type</Label>
-                <Select value={sprintType} onValueChange={(value: 'PROJECT' | 'CASUAL') => setSprintType(value)}>
+                <Select value={sprintType} onValueChange={session ? (value: 'PROJECT' | 'CASUAL') => setSprintType(value) : () => {}} disabled={!session}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select sprint type" />
                   </SelectTrigger>
@@ -234,8 +255,8 @@ export function NewSprintDialog({ onSprintCreated }: NewSprintDialogProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Creating..." : "Create Sprint"}
+            <Button type="submit" disabled={isLoading || !session}>
+              {!session ? "Preview Mode" : isLoading ? "Creating..." : "Create Sprint"}
             </Button>
           </DialogFooter>
         </form>

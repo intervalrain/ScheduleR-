@@ -18,9 +18,10 @@ interface DatePickerProps {
   date?: Date;
   onDateChange?: (date: Date | undefined) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
-export function DatePicker({ date, onDateChange, placeholder = "Pick a date" }: DatePickerProps) {
+export function DatePicker({ date, onDateChange, placeholder = "Pick a date", disabled = false }: DatePickerProps) {
   const [internalDate, setInternalDate] = React.useState<Date>()
 
   const selectedDate = date || internalDate;
@@ -41,6 +42,7 @@ export function DatePicker({ date, onDateChange, placeholder = "Pick a date" }: 
             "w-full justify-start text-left font-normal",
             !selectedDate && "text-muted-foreground"
           )}
+          disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
           {selectedDate ? format(selectedDate, "PPP") : <span>{placeholder}</span>}

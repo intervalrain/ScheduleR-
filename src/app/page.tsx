@@ -3,13 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, differenceInDays, isPast, addDays, parseISO } from "date-fns";
+import { format, differenceInDays, isPast } from "date-fns";
 import { useSession } from "next-auth/react";
 import { mockSprints, mockTasks, getMockTasksBySprintId } from "@/lib/mockData";
+import { EditSprintDialog } from "@/components/EditSprintDialog";
 import { CalendarIcon, EditIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, TrendingUpIcon, ClockIcon, CheckCircleIcon, BarChart3Icon, HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, GitBranchIcon, MessageSquareIcon, FileTextIcon, TargetIcon, TrendingDownIcon } from "lucide-react";
 
 interface Sprint {
@@ -45,12 +43,6 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    startDate: '',
-    endDate: '',
-    duration: 14
-  });
   const [enabledWidgets, setEnabledWidgets] = useState<WidgetConfig[]>([]);
   const [currentWidgetIndex, setCurrentWidgetIndex] = useState(0);
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
@@ -173,52 +165,10 @@ export default function Home() {
 
   const handleEditSprint = () => {
     if (selectedSprint) {
-      setEditForm({
-        name: selectedSprint.name,
-        startDate: selectedSprint.startDate.split('T')[0],
-        endDate: selectedSprint.endDate.split('T')[0],
-        duration: differenceInDays(new Date(selectedSprint.endDate), new Date(selectedSprint.startDate)) + 1
-      });
       setEditDialogOpen(true);
     }
   };
 
-  const handleDurationChange = (duration: number) => {
-    setEditForm(prev => {
-      const startDate = new Date(prev.startDate);
-      const endDate = addDays(startDate, duration - 1);
-      return {
-        ...prev,
-        duration,
-        endDate: endDate.toISOString().split('T')[0]
-      };
-    });
-  };
-
-  const handleSaveSprint = async () => {
-    if (!selectedSprint) return;
-    
-    try {
-      const response = await fetch(`/api/sprints/${selectedSprint.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editForm.name,
-          startDate: new Date(editForm.startDate).toISOString(),
-          endDate: new Date(editForm.endDate).toISOString()
-        })
-      });
-      
-      if (response.ok) {
-        await fetchSprints();
-        setEditDialogOpen(false);
-      } else {
-        console.error('Failed to update sprint');
-      }
-    } catch (error) {
-      console.error('Error updating sprint:', error);
-    }
-  };
 
   const totalDays = selectedSprint
     ? differenceInDays(new Date(selectedSprint.endDate), new Date(selectedSprint.startDate)) + 1
@@ -603,90 +553,12 @@ export default function Home() {
           </div>
 
           {/* Edit Sprint Dialog */}
-          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Edit Sprint</DialogTitle>
-                <DialogDescription>
-                  Modify sprint details and duration
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Name
-                  </Label>
-                  <Input
-                    id="name"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="startDate" className="text-right">
-                    Start Date
-                  </Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={editForm.startDate}
-                    onChange={(e) => {
-                      setEditForm(prev => {
-                        const startDate = new Date(e.target.value);
-                        const endDate = addDays(startDate, prev.duration - 1);
-                        return {
-                          ...prev,
-                          startDate: e.target.value,
-                          endDate: endDate.toISOString().split('T')[0]
-                        };
-                      });
-                    }}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="duration" className="text-right">
-                    Duration
-                  </Label>
-                  <Select 
-                    value={editForm.duration.toString()} 
-                    onValueChange={(value) => handleDurationChange(parseInt(value))}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="7">1 week (7 days)</SelectItem>
-                      <SelectItem value="14">2 weeks (14 days)</SelectItem>
-                      <SelectItem value="21">3 weeks (21 days)</SelectItem>
-                      <SelectItem value="30">1 month (30 days)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="endDate" className="text-right">
-                    End Date
-                  </Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={editForm.endDate}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSaveSprint}>
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <EditSprintDialog
+            sprint={selectedSprint}
+            isOpen={editDialogOpen}
+            setIsOpen={setEditDialogOpen}
+            onSprintUpdated={fetchSprints}
+          />
         </>
       ) : (
         <Card>

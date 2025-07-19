@@ -70,6 +70,12 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
   const handleCreateTask = async () => {
     if (!taskName.trim()) return;
     
+    // Disable creation when not authenticated
+    if (!session) {
+      console.log('Not authenticated, task creation disabled');
+      return;
+    }
+    
     setLoading(true);
     
     const taskData = {
@@ -138,6 +144,22 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
             Enter the details of the new task.
           </DialogDescription>
         </DialogHeader>
+        
+        {!session && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
+                <span className="text-white text-xs font-bold">!</span>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-amber-800">Preview Mode</h4>
+                <p className="text-xs text-amber-700">
+                  You're viewing the task creation form. Sign in to create actual tasks.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <label htmlFor="name" className="text-right">
@@ -149,6 +171,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
               value={taskName}
               onChange={(e) => setTaskName(e.target.value)}
               placeholder="Enter task name"
+              disabled={!session}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -161,6 +184,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Enter task description"
+              disabled={!session}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -173,13 +197,14 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
               value={estimate}
               onChange={(e) => setEstimate(e.target.value)}
               placeholder="Enter estimated hours"
+              disabled={!session}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <label htmlFor="priority" className="text-right">
               Priority
             </label>
-            <Select value={priority.toString()} onValueChange={(value) => setPriority(parseInt(value))}>
+            <Select value={priority.toString()} onValueChange={session ? (value) => setPriority(parseInt(value)) : () => {}} disabled={!session}>
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
@@ -193,7 +218,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
             <label htmlFor="status" className="text-right">
               Status
             </label>
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={session ? setStatus : () => {}} disabled={!session}>
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
@@ -215,6 +240,7 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="frontend, backend, bug (comma separated)"
+              disabled={!session}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -227,13 +253,14 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
               value={labels}
               onChange={(e) => setLabels(e.target.value)}
               placeholder="urgent, feature, enhancement (comma separated)"
+              disabled={!session}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <label htmlFor="assignee" className="text-right">
               Assignee
             </label>
-            <Select value={assigneeId} onValueChange={setAssigneeId}>
+            <Select value={assigneeId} onValueChange={session ? setAssigneeId : () => {}} disabled={!session}>
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Select assignee" />
               </SelectTrigger>
@@ -281,9 +308,9 @@ export function NewTaskDialog({ isOpen, setIsOpen, selectedSprintId }: NewTaskDi
           <Button 
             type="submit" 
             onClick={handleCreateTask}
-            disabled={loading || !taskName.trim()}
+            disabled={loading || !taskName.trim() || !session}
           >
-            {loading ? "Creating..." : "Create Task"}
+            {!session ? "Preview Mode" : loading ? "Creating..." : "Create Task"}
           </Button>
         </DialogFooter>
       </DialogContent>

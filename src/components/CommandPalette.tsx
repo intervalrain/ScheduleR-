@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "cmdk";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useRouter } from "next/navigation";
 import { useNewTaskDialog } from "./NewTaskDialogProvider";
@@ -152,6 +152,7 @@ export function CommandPalette() {
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="p-0 shadow-2xl max-w-[540px] border-border/50">
+          <DialogTitle className="sr-only">Command Palette</DialogTitle>
           <Command className="rounded-lg border-0">
             <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
               <SearchIcon className="w-4 h-4 text-muted-foreground" />
