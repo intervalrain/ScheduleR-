@@ -73,7 +73,7 @@ export default function Sidebar() {
         });
         
         if (response.ok) {
-          const fetchedTasks = await response.json();
+          const fetchedTasks: Task[] = await response.json();
           console.log('Sidebar: Fetched tasks:', fetchedTasks.length);
           // Sort tasks by priority in descending order
           const sortedTasks = sortByPriorityDescending(fetchedTasks);

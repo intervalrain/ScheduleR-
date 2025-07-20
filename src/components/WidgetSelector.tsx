@@ -15,7 +15,7 @@ import {
   TrendingUpIcon, CheckCircleIcon, ClockIcon, BarChart3Icon, 
   HeartIcon, UsersIcon, ZapIcon, AlertTriangleIcon, 
   GitBranchIcon, CalendarIcon, TargetIcon, TrendingDownIcon,
-  LockIcon, BeakerIcon
+  LockIcon, BeakerIcon, DatabaseIcon, Calculator, FlaskConicalIcon
 } from "lucide-react";
 
 interface Widget {
@@ -25,6 +25,7 @@ interface Widget {
   icon: React.ReactNode;
   status: 'completed' | 'available' | 'preview' | 'future';
   category: 'basic' | 'advanced' | 'external';
+  dataSource?: 'real' | 'mock' | 'calculated';
 }
 
 const availableWidgets: Widget[] = [
@@ -35,7 +36,8 @@ const availableWidgets: Widget[] = [
     description: 'Track sprint time progress',
     icon: <TrendingUpIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'calculated' // Based on sprint dates
   },
   {
     id: 'task-summary',
@@ -43,7 +45,8 @@ const availableWidgets: Widget[] = [
     description: 'View task completion status',
     icon: <CheckCircleIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'real' // From /api/tasks
   },
   {
     id: 'hours-summary',
@@ -51,7 +54,8 @@ const availableWidgets: Widget[] = [
     description: 'Sum of estimated work hours',
     icon: <ClockIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'real' // From /api/tasks estimated hours
   },
   {
     id: 'work-hours',
@@ -59,7 +63,8 @@ const availableWidgets: Widget[] = [
     description: 'Sprint hours minus busy hours',
     icon: <ClockIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'real' // From /api/user/busy-hours + sprint config
   },
   {
     id: 'progress-chart',
@@ -67,7 +72,8 @@ const availableWidgets: Widget[] = [
     description: 'Task status breakdown',
     icon: <BarChart3Icon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'real' // From /api/tasks status
   },
   {
     id: 'task-distribution',
@@ -75,7 +81,8 @@ const availableWidgets: Widget[] = [
     description: 'Task completion percentage',
     icon: <TargetIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'calculated' // Calculated from task data
   },
   {
     id: 'recent-activity',
@@ -83,7 +90,8 @@ const availableWidgets: Widget[] = [
     description: 'Track activity metrics',
     icon: <GitBranchIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'mock' // Currently shows total task count
   },
   {
     id: 'calendar-overview',
@@ -91,7 +99,8 @@ const availableWidgets: Widget[] = [
     description: 'Time blocked in sprint',
     icon: <CalendarIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'real' // From /api/user/busy-hours
   },
   {
     id: 'sprint-progress',
@@ -99,7 +108,8 @@ const availableWidgets: Widget[] = [
     description: 'Days elapsed and remaining',
     icon: <TrendingUpIcon className="w-4 h-4" />,
     status: 'completed',
-    category: 'basic'
+    category: 'basic',
+    dataSource: 'calculated' // Based on sprint dates
   },
   
   // Preview-only widgets (need more work)
@@ -109,7 +119,8 @@ const availableWidgets: Widget[] = [
     description: 'Overall sprint status indicator',
     icon: <HeartIcon className="w-4 h-4" />,
     status: 'preview',
-    category: 'advanced'
+    category: 'advanced',
+    dataSource: 'mock' // Simplified calculation
   },
   {
     id: 'team-workload',
@@ -117,7 +128,8 @@ const availableWidgets: Widget[] = [
     description: 'Team member task distribution',
     icon: <UsersIcon className="w-4 h-4" />,
     status: 'preview',
-    category: 'advanced'
+    category: 'advanced',
+    dataSource: 'mock' // Currently shows active tasks count
   },
   {
     id: 'velocity',
@@ -125,7 +137,8 @@ const availableWidgets: Widget[] = [
     description: 'Sprint completion velocity',
     icon: <ZapIcon className="w-4 h-4" />,
     status: 'preview',
-    category: 'advanced'
+    category: 'advanced',
+    dataSource: 'mock' // Shows completion percentage
   },
   {
     id: 'risk-assessment',
@@ -133,7 +146,8 @@ const availableWidgets: Widget[] = [
     description: 'Sprint risk analysis',
     icon: <AlertTriangleIcon className="w-4 h-4" />,
     status: 'preview',
-    category: 'advanced'
+    category: 'advanced',
+    dataSource: 'mock' // No real risk calculation yet
   },
   {
     id: 'burndown-chart',
@@ -141,7 +155,8 @@ const availableWidgets: Widget[] = [
     description: 'Work remaining over time',
     icon: <TrendingDownIcon className="w-4 h-4" />,
     status: 'preview',
-    category: 'advanced'
+    category: 'advanced',
+    dataSource: 'mock' // No time tracking data yet
   },
   
   // Future widgets (need external integration)
@@ -151,7 +166,8 @@ const availableWidgets: Widget[] = [
     description: 'GitHub/GitLab integration',
     icon: <GitBranchIcon className="w-4 h-4" />,
     status: 'future',
-    category: 'external'
+    category: 'external',
+    dataSource: 'mock' // Requires external API
   },
   {
     id: 'team-communication',
@@ -159,7 +175,8 @@ const availableWidgets: Widget[] = [
     description: 'Chat and comments system',
     icon: <UsersIcon className="w-4 h-4" />,
     status: 'future',
-    category: 'external'
+    category: 'external',
+    dataSource: 'mock' // Requires chat system
   }
 ];
 
@@ -197,6 +214,22 @@ export function WidgetSelector({ isOpen, setIsOpen, enabledWidgets, onSave }: Wi
         return <Badge variant="secondary" className="text-xs"><BeakerIcon className="w-3 h-3 mr-1" />Preview Only</Badge>;
       case 'future':
         return <Badge variant="outline" className="text-xs"><LockIcon className="w-3 h-3 mr-1" />Coming Soon</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const getAvailabilityBadge = (status: Widget['status']) => {
+    switch (status) {
+      case 'completed':
+        return <Badge className="text-xs bg-green-500 text-white border-green-600 font-semibold">
+          <DatabaseIcon className="w-3 h-3 mr-1" />Available
+        </Badge>;
+      case 'preview':
+      case 'future':
+        return <Badge className="text-xs bg-orange-500 text-white border-orange-600 font-semibold">
+          <FlaskConicalIcon className="w-3 h-3 mr-1" />Coming Soon
+        </Badge>;
       default:
         return null;
     }
@@ -242,7 +275,9 @@ export function WidgetSelector({ isOpen, setIsOpen, enabledWidgets, onSave }: Wi
                           {widget.icon}
                         </div>
                         <span className="font-medium text-sm">{widget.name}</span>
-                        {getStatusBadge(widget.status)}
+                        <div className="flex gap-1">
+                          {getAvailabilityBadge(widget.status)}
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{widget.description}</p>
                     </div>

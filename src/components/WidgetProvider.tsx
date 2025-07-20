@@ -26,8 +26,11 @@ import {
   MessageSquareIcon,
   FileTextIcon,
   TargetIcon,
-  TrendingDownIcon
+  TrendingDownIcon,
+  DatabaseIcon,
+  FlaskConicalIcon
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface WidgetItem {
   id: string;
@@ -36,6 +39,7 @@ interface WidgetItem {
   icon: React.ReactNode;
   category: string;
   enabled: boolean;
+  status: 'completed' | 'preview' | 'future';
 }
 
 interface WidgetConfig {
@@ -48,13 +52,15 @@ interface WidgetProviderProps {
 }
 
 const availableWidgets: WidgetItem[] = [
+  // Available widgets (completed)
   {
     id: "completion-rate",
     title: "Sprint Completion Rate",
     description: "Shows the overall completion percentage of current sprint",
     icon: <TrendingUpIcon className="w-4 h-4" />,
     category: "Progress",
-    enabled: true
+    enabled: true,
+    status: 'completed'
   },
   {
     id: "task-summary",
@@ -62,7 +68,8 @@ const availableWidgets: WidgetItem[] = [
     description: "Overview of total, completed, and in-progress tasks",
     icon: <CheckCircleIcon className="w-4 h-4" />,
     category: "Tasks",
-    enabled: true
+    enabled: true,
+    status: 'completed'
   },
   {
     id: "hours-summary",
@@ -70,15 +77,8 @@ const availableWidgets: WidgetItem[] = [
     description: "Total estimated work hours for all tasks",
     icon: <ClockIcon className="w-4 h-4" />,
     category: "Time",
-    enabled: true
-  },
-  {
-    id: "sprint-health",
-    title: "Sprint Health",
-    description: "Health indicator based on completed vs consumed hours",
-    icon: <HeartIcon className="w-4 h-4" />,
-    category: "Health",
-    enabled: true
+    enabled: true,
+    status: 'completed'
   },
   {
     id: "progress-chart",
@@ -86,39 +86,26 @@ const availableWidgets: WidgetItem[] = [
     description: "Visual representation of task completion progress",
     icon: <BarChart3Icon className="w-4 h-4" />,
     category: "Progress",
-    enabled: true
+    enabled: true,
+    status: 'completed'
   },
   {
-    id: "team-workload",
-    title: "Team Workload",
-    description: "Shows individual team member workload vs capacity",
-    icon: <UsersIcon className="w-4 h-4" />,
-    category: "Team",
-    enabled: true
+    id: "task-distribution",
+    title: "Task Distribution",
+    description: "Task completion percentage breakdown",
+    icon: <TargetIcon className="w-4 h-4" />,
+    category: "Tasks",
+    enabled: true,
+    status: 'completed'
   },
   {
-    id: "velocity",
-    title: "Sprint Velocity",
-    description: "Current and historical sprint velocity metrics",
-    icon: <ZapIcon className="w-4 h-4" />,
-    category: "Metrics",
-    enabled: true
-  },
-  {
-    id: "risk-assessment",
-    title: "Risk Assessment",
-    description: "Project risk level and contributing factors",
-    icon: <AlertTriangleIcon className="w-4 h-4" />,
-    category: "Risk",
-    enabled: true
-  },
-  {
-    id: "burndown",
-    title: "Burndown Chart",
-    description: "Shows remaining work over time",
-    icon: <TrendingUpIcon className="w-4 h-4" />,
-    category: "Progress",
-    enabled: true
+    id: "work-hours",
+    title: "Available Hours",
+    description: "Sprint hours minus busy hours",
+    icon: <ClockIcon className="w-4 h-4" />,
+    category: "Time",
+    enabled: true,
+    status: 'completed'
   },
   {
     id: "recent-activity",
@@ -126,7 +113,8 @@ const availableWidgets: WidgetItem[] = [
     description: "Latest task updates and activities",
     icon: <CheckCircleIcon className="w-4 h-4" />,
     category: "Activity",
-    enabled: true
+    enabled: true,
+    status: 'completed'
   },
   {
     id: "calendar-overview",
@@ -134,7 +122,64 @@ const availableWidgets: WidgetItem[] = [
     description: "Upcoming deadlines and scheduled tasks",
     icon: <CalendarIcon className="w-4 h-4" />,
     category: "Planning",
-    enabled: true
+    enabled: true,
+    status: 'completed'
+  },
+  {
+    id: "sprint-progress",
+    title: "Sprint Progress",
+    description: "Days elapsed and remaining in sprint",
+    icon: <TrendingUpIcon className="w-4 h-4" />,
+    category: "Progress",
+    enabled: true,
+    status: 'completed'
+  },
+  
+  // Coming Soon widgets (preview/future)
+  {
+    id: "sprint-health",
+    title: "Sprint Health",
+    description: "Health indicator based on completed vs consumed hours",
+    icon: <HeartIcon className="w-4 h-4" />,
+    category: "Health",
+    enabled: true,
+    status: 'preview'
+  },
+  {
+    id: "team-workload",
+    title: "Team Workload",
+    description: "Shows individual team member workload vs capacity",
+    icon: <UsersIcon className="w-4 h-4" />,
+    category: "Team",
+    enabled: true,
+    status: 'preview'
+  },
+  {
+    id: "velocity",
+    title: "Sprint Velocity",
+    description: "Current and historical sprint velocity metrics",
+    icon: <ZapIcon className="w-4 h-4" />,
+    category: "Metrics",
+    enabled: true,
+    status: 'preview'
+  },
+  {
+    id: "risk-assessment",
+    title: "Risk Assessment",
+    description: "Project risk level and contributing factors",
+    icon: <AlertTriangleIcon className="w-4 h-4" />,
+    category: "Risk",
+    enabled: true,
+    status: 'preview'
+  },
+  {
+    id: "burndown",
+    title: "Burndown Chart",
+    description: "Shows remaining work over time",
+    icon: <TrendingUpIcon className="w-4 h-4" />,
+    category: "Progress",
+    enabled: true,
+    status: 'preview'
   },
   {
     id: "code-commits",
@@ -142,7 +187,8 @@ const availableWidgets: WidgetItem[] = [
     description: "Recent git commits and code changes",
     icon: <GitBranchIcon className="w-4 h-4" />,
     category: "Development",
-    enabled: true
+    enabled: true,
+    status: 'future'
   },
   {
     id: "team-communication",
@@ -150,31 +196,8 @@ const availableWidgets: WidgetItem[] = [
     description: "Latest messages and notifications",
     icon: <MessageSquareIcon className="w-4 h-4" />,
     category: "Communication",
-    enabled: true
-  },
-  {
-    id: "project-documentation",
-    title: "Project Documentation",
-    description: "Important documents and resources",
-    icon: <FileTextIcon className="w-4 h-4" />,
-    category: "Documentation",
-    enabled: true
-  },
-  {
-    id: "performance-metrics",
-    title: "Performance Metrics",
-    description: "Application performance and monitoring",
-    icon: <TargetIcon className="w-4 h-4" />,
-    category: "Performance",
-    enabled: true
-  },
-  {
-    id: "resource-usage",
-    title: "Resource Usage",
-    description: "System resource consumption tracking",
-    icon: <TrendingDownIcon className="w-4 h-4" />,
-    category: "System",
-    enabled: true
+    enabled: true,
+    status: 'future'
   }
 ];
 
@@ -188,6 +211,22 @@ export default function WidgetProvider({ enabledWidgets, onWidgetToggle }: Widge
   const handleToggle = (widgetId: string) => {
     const enabled = isEnabled(widgetId);
     onWidgetToggle(widgetId, !enabled);
+  };
+
+  const getAvailabilityBadge = (status: WidgetItem['status']) => {
+    switch (status) {
+      case 'completed':
+        return <Badge className="text-xs bg-green-500 text-white border-green-600 font-semibold">
+          <DatabaseIcon className="w-3 h-3 mr-1" />Available
+        </Badge>;
+      case 'preview':
+      case 'future':
+        return <Badge className="text-xs bg-orange-500 text-white border-orange-600 font-semibold">
+          <FlaskConicalIcon className="w-3 h-3 mr-1" />Coming Soon
+        </Badge>;
+      default:
+        return null;
+    }
   };
   
 
@@ -233,6 +272,7 @@ export default function WidgetProvider({ enabledWidgets, onWidgetToggle }: Widge
                                 <CardTitle className="text-sm">{widget.title}</CardTitle>
                               </div>
                               <div className="flex items-center gap-2">
+                                {getAvailabilityBadge(widget.status)}
                                 {isEnabled(widget.id) && (
                                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                                 )}

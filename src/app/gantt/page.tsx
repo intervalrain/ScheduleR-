@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarIcon, RefreshCwIcon } from "lucide-react";
 import { useTaskRefresh } from "@/context/TaskContext";
 import { Chart } from "react-google-charts";
-import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData";
+import { getMockTasksBySprintId, getMockSubTasksByTaskId, mockBusyHours } from "@/lib/mockData";
 import { useSession } from "next-auth/react";
 import { addDays, differenceInDays, format } from "date-fns";
 import { useSidebar } from "@/context/SidebarContext";
@@ -57,6 +57,11 @@ export default function GanttPage() {
     workHours: { start: string; end: string };
     workDays: number[];
   }>({ workHours: { start: '09:00', end: '17:00' }, workDays: [1, 2, 3, 4, 5] });
+  const [busyHours, setBusyHours] = useState<Array<{
+    id: string;
+    startTime: string;
+    endTime: string;
+  }>>([]);
 
   // Update work settings when selected sprint changes
   useEffect(() => {
@@ -211,9 +216,28 @@ export default function GanttPage() {
     }
   };
 
+  const fetchBusyHours = async () => {
+    try {
+      if (!session) {
+        // Use mock data when not authenticated
+        setBusyHours(mockBusyHours);
+        return;
+      }
+      
+      const response = await fetch("/api/user/busy-hours");
+      if (response.ok) {
+        const data = await response.json();
+        setBusyHours(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch busy hours:", error);
+    }
+  };
+
   useEffect(() => {
     if (selectedSprintId) {
       fetchTasks();
+      fetchBusyHours();
     }
   }, [selectedSprintId, refreshTrigger]);
   
@@ -246,8 +270,8 @@ export default function GanttPage() {
         return aOrder - bOrder;
       }
       
-      // If same status, sort by priority (lower number = higher priority)
-      return (a.priority || 999999) - (b.priority || 999999);
+      // If same status, sort by priority (higher number = higher priority, matches Dashboard)
+      return (b.priority || 0) - (a.priority || 0);
     });
 
     // Helper functions
@@ -269,7 +293,7 @@ export default function GanttPage() {
       availableHours: number;
     }
 
-    const generateWorkBlocks = (): WorkBlock[] => {
+    const generateWorkBlocks = (extendBeyondSprint: boolean = false): WorkBlock[] => {
       const workBlocks: WorkBlock[] = [];
       let currentDate = new Date(sprintStartDate);
       
@@ -277,21 +301,68 @@ export default function GanttPage() {
       const workEndMinutes = parseTimeToMinutes(userSettings.workHours.end);
       const hoursPerDay = (workEndMinutes - workStartMinutes) / 60;
       
+      // Generate work blocks within Sprint period (with busy hours consideration)
       while (currentDate <= sprintEndDate) {
         if (isWorkDay(currentDate)) {
+          // Calculate busy hours for this specific date
+          const dayStart = new Date(currentDate);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(currentDate);
+          dayEnd.setHours(23, 59, 59, 999);
+          
+          const dayBusyHours = busyHours.filter(bh => {
+            const busyStart = new Date(bh.startTime);
+            const busyEnd = new Date(bh.endTime);
+            return busyStart >= dayStart && busyEnd <= dayEnd;
+          });
+          
+          // Calculate total busy time in hours for this day
+          const totalBusyHours = dayBusyHours.reduce((total, bh) => {
+            const busyStart = new Date(bh.startTime);
+            const busyEnd = new Date(bh.endTime);
+            const busyDurationHours = (busyEnd.getTime() - busyStart.getTime()) / (1000 * 60 * 60);
+            return total + busyDurationHours;
+          }, 0);
+          
+          // Available hours = regular work hours - busy hours
+          const availableHours = Math.max(0, hoursPerDay - totalBusyHours);
+          
           workBlocks.push({
             date: new Date(currentDate),
             startMinutes: workStartMinutes,
             endMinutes: workEndMinutes,
-            availableHours: hoursPerDay
+            availableHours: availableHours
           });
         }
         currentDate = addDays(currentDate, 1);
       }
+      
+      // If extending beyond Sprint, add work blocks with regular work hours (but no busy hours)
+      if (extendBeyondSprint) {
+        // Add up to 365 additional days (1 year) for post-sprint work
+        const maxExtensionDays = 365;
+        let extensionDays = 0;
+        
+        while (extensionDays < maxExtensionDays) {
+          // Beyond Sprint period, maintain work day/hour restrictions but ignore busy hours
+          if (isWorkDay(currentDate)) {
+            workBlocks.push({
+              date: new Date(currentDate),
+              startMinutes: workStartMinutes,  // Use regular work start time
+              endMinutes: workEndMinutes,      // Use regular work end time
+              availableHours: hoursPerDay      // Regular daily work hours
+            });
+          }
+          
+          currentDate = addDays(currentDate, 1);
+          extensionDays++;
+        }
+      }
+      
       return workBlocks;
     };
 
-    const workBlocks = generateWorkBlocks();
+    let workBlocks = generateWorkBlocks();
     
     // Debug logging
     console.log(`Generated ${workBlocks.length} work blocks for ${selectedSprint.type || 'PROJECT'} Sprint:`);
@@ -309,7 +380,7 @@ export default function GanttPage() {
     let workBlockPointer = 0; // Points to current work block
     let currentBlockHoursUsed = 0; // Hours already used in current block
 
-    while (taskPointer < sortedTasks.length && workBlockPointer < workBlocks.length) {
+    while (taskPointer < sortedTasks.length) {
       const currentTask = sortedTasks[taskPointer];
       const needHours = currentTask.estimatedHours || 8;
       
@@ -332,7 +403,17 @@ export default function GanttPage() {
       let tempBlockHoursUsed = currentBlockHoursUsed;
       
       // Find where task ends by consuming work hours
-      while (remainingHours > 0 && tempWorkBlockPointer < workBlocks.length) {
+      while (remainingHours > 0) {
+        // If we've run out of work blocks, extend them beyond Sprint period
+        if (tempWorkBlockPointer >= workBlocks.length) {
+          console.log(`Task extends beyond Sprint period, generating extended work blocks...`);
+          const extendedBlocks = generateWorkBlocks(true);
+          // Only take the blocks that are beyond the current blocks
+          const newBlocks = extendedBlocks.slice(workBlocks.length);
+          workBlocks = [...workBlocks, ...newBlocks];
+          console.log(`Extended work blocks from ${workBlocks.length - newBlocks.length} to ${workBlocks.length} blocks`);
+        }
+        
         const currentBlock = workBlocks[tempWorkBlockPointer];
         const availableHoursInBlock = currentBlock.availableHours - tempBlockHoursUsed;
         
@@ -359,33 +440,22 @@ export default function GanttPage() {
         }
       }
       
-      // Calculate task end time
+      // Calculate task end time (task is guaranteed to be completed)
       let taskEndDateTime: Date;
-      if (remainingHours <= 0) {
-        // Task completed successfully
-        if (tempBlockHoursUsed > 0 && tempWorkBlockPointer < workBlocks.length) {
-          // Task ends within current block
-          const endBlock = workBlocks[tempWorkBlockPointer];
-          const endMinutes = endBlock.startMinutes + (tempBlockHoursUsed * 60);
-          taskEndDateTime = new Date(endBlock.date);
-          taskEndDateTime.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-        } else if (tempWorkBlockPointer > 0) {
-          // Task ended exactly at the end of previous block
-          const lastBlock = workBlocks[tempWorkBlockPointer - 1];
-          taskEndDateTime = new Date(lastBlock.date);
-          taskEndDateTime.setHours(Math.floor(lastBlock.endMinutes / 60), lastBlock.endMinutes % 60, 0, 0);
-        } else {
-          taskEndDateTime = new Date(taskStartDateTime);
-        }
+      if (tempBlockHoursUsed > 0 && tempWorkBlockPointer < workBlocks.length) {
+        // Task ends within current block
+        const endBlock = workBlocks[tempWorkBlockPointer];
+        const endMinutes = endBlock.startMinutes + (tempBlockHoursUsed * 60);
+        taskEndDateTime = new Date(endBlock.date);
+        taskEndDateTime.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+      } else if (tempWorkBlockPointer > 0) {
+        // Task ended exactly at the end of previous block
+        const lastBlock = workBlocks[tempWorkBlockPointer - 1];
+        taskEndDateTime = new Date(lastBlock.date);
+        taskEndDateTime.setHours(Math.floor(lastBlock.endMinutes / 60), lastBlock.endMinutes % 60, 0, 0);
       } else {
-        // Task extends beyond available work blocks
-        if (tempWorkBlockPointer > 0) {
-          const lastBlock = workBlocks[tempWorkBlockPointer - 1];
-          taskEndDateTime = new Date(lastBlock.date);
-          taskEndDateTime.setHours(Math.floor(lastBlock.endMinutes / 60), lastBlock.endMinutes % 60, 0, 0);
-        } else {
-          taskEndDateTime = new Date(taskStartDateTime);
-        }
+        // Fallback (shouldn't happen with proper logic)
+        taskEndDateTime = new Date(taskStartDateTime);
       }
       
       console.log(`Task ends at: ${format(taskEndDateTime, 'yyyy-MM-dd HH:mm')}`);
@@ -397,20 +467,13 @@ export default function GanttPage() {
         estimatedDays: Math.ceil(needHours / 8)
       });
       
-      // Update pointers for next task - handle off hour boundary
-      if (remainingHours <= 0) {
-        // Task completed successfully
-        if (tempBlockHoursUsed > 0 && tempWorkBlockPointer < workBlocks.length) {
-          // Task ends within current block, continue from current position
-          workBlockPointer = tempWorkBlockPointer;
-          currentBlockHoursUsed = tempBlockHoursUsed;
-        } else {
-          // Task ended exactly at block boundary, move to next block
-          workBlockPointer = tempWorkBlockPointer;
-          currentBlockHoursUsed = 0;
-        }
+      // Update pointers for next task (task is guaranteed to be completed)
+      if (tempBlockHoursUsed > 0 && tempWorkBlockPointer < workBlocks.length) {
+        // Task ends within current block, continue from current position
+        workBlockPointer = tempWorkBlockPointer;
+        currentBlockHoursUsed = tempBlockHoursUsed;
       } else {
-        // Task couldn't be completed, move to next available block
+        // Task ended exactly at block boundary, move to next block
         workBlockPointer = tempWorkBlockPointer;
         currentBlockHoursUsed = 0;
       }
@@ -432,8 +495,17 @@ export default function GanttPage() {
     const sprintStart = new Date(selectedSprint.startDate);
     const sprintEnd = new Date(selectedSprint.endDate);
     
-    // Always show the full sprint range
-    return { start: sprintStart, end: sprintEnd };
+    // Find the latest task end date to extend chart range if needed
+    let latestEndDate = sprintEnd;
+    if (scheduledTasks.length > 0) {
+      const taskEndDates = scheduledTasks.map(task => task.endDate);
+      const maxTaskEndDate = new Date(Math.max(...taskEndDates.map(date => date.getTime())));
+      if (maxTaskEndDate > latestEndDate) {
+        latestEndDate = maxTaskEndDate;
+      }
+    }
+    
+    return { start: sprintStart, end: latestEndDate };
   };
 
   // Prepare data for Google Charts Gantt
@@ -449,7 +521,36 @@ export default function GanttPage() {
       { type: 'string', label: 'Dependencies' },
     ];
 
-    const rows = scheduledTasks.map((task) => {
+    // Separate tasks based on Sprint End boundary
+    const sprintEndDate = selectedSprint ? new Date(selectedSprint.endDate) : null;
+    const tasksBeforeSprintEnd: typeof scheduledTasks = [];
+    const tasksAfterSprintEnd: typeof scheduledTasks = [];
+    
+    // Find the correct position to insert Sprint End marker
+    let sprintEndInsertIndex = 0;
+    
+    scheduledTasks.forEach((task, index) => {
+      if (!sprintEndDate) {
+        tasksBeforeSprintEnd.push(task);
+        return;
+      }
+      
+      // Check if task crosses Sprint boundary
+      const taskStartsBeforeSprintEnd = task.startDate <= sprintEndDate;
+      const taskEndsAfterSprintEnd = task.endDate > sprintEndDate;
+      
+      if (taskStartsBeforeSprintEnd) {
+        tasksBeforeSprintEnd.push(task);
+        // If this task crosses Sprint end, Sprint End should come after it
+        if (taskEndsAfterSprintEnd) {
+          sprintEndInsertIndex = tasksBeforeSprintEnd.length;
+        }
+      } else {
+        tasksAfterSprintEnd.push(task);
+      }
+    });
+
+    const createTaskRow = (task: typeof scheduledTasks[0]) => {
       const startDate = task.startDate;
       const endDate = task.endDate;
       const duration = endDate.getTime() - startDate.getTime();
@@ -477,28 +578,43 @@ export default function GanttPage() {
         percentComplete,
         dependencies
       ];
+    };
+
+    const rows = [];
+    
+    // Add all tasks before Sprint End marker
+    tasksBeforeSprintEnd.forEach(task => {
+      rows.push(createTaskRow(task));
     });
 
-    // Add sprint end marker in Full view
-    if (selectedSprint) {
-      const sprintEndDate = new Date(selectedSprint.endDate);
-      // Set end time to 23:59:59 of the sprint end date
-      sprintEndDate.setHours(23, 59, 59, 999);
+    // Add Sprint End marker as a thin line at the correct position
+    if (selectedSprint && sprintEndDate) {
+      // Use the actual Sprint end date from selectedSprint
+      const actualSprintEndDate = new Date(selectedSprint.endDate);
       
-      // Start just 1 minute before sprint end
-      const sprintEndStartDate = new Date(sprintEndDate.getTime() - 60000); // 1 minute before
+      // Create a very thin marker at the end of Sprint end date
+      const sprintEndDateTime = new Date(selectedSprint.endDate);
+      sprintEndDateTime.setHours(23, 59, 59, 0); // End of day
+      
+      // Make it just 1 minute duration for a thin line effect
+      const sprintEndStartTime = new Date(sprintEndDateTime.getTime() - 60000); // 1 minute before
       
       rows.push([
         'sprint-end',
-        '🏁 Sprint End',
-        'MILESTONE',
-        sprintEndStartDate,
-        sprintEndDate,
-        60000, // 1 minute duration
+        `⚠️ SPRINT DEADLINE (${actualSprintEndDate.toLocaleDateString()}) ⚠️`,
+        'SPRINT_END',
+        sprintEndStartTime,
+        sprintEndDateTime,
+        60000, // 1 minute duration = thin line
         100,
         null
       ]);
     }
+
+    // Add tasks that start after Sprint End
+    tasksAfterSprintEnd.forEach(task => {
+      rows.push(createTaskRow(task));
+    });
 
     return [columns, ...rows];
   };
@@ -551,6 +667,8 @@ export default function GanttPage() {
         spaceAfter: 4
       }
     },
+    colors: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ff0000'],
+    colorByRowLabel: true,
     backgroundColor: '#fff',
     explorer: {
       actions: ['dragToZoom', 'rightClickToReset'],

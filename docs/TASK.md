@@ -104,6 +104,13 @@
   - 持久化: localStorage 保存用戶偏好順序
   - 響應式: 支援 1-4 欄位自適應佈局
 
+- **Widget 管理系統** ✅ **(2025-07-20 完成)**
+  - 狀態標示: Available/Coming Soon 徽章系統
+  - 同步管理: Home 和 Dashboard 頁面 Widget 選擇器同步
+  - 視覺設計: 綠色 Available、橘色 Coming Soon 徽章
+  - 圖標標示: Database 圖標 (Available)、Flask 圖標 (Coming Soon)
+  - 分類管理: 9個 Available widgets、8個 Coming Soon widgets
+
 #### 🟡 可基於現有數據完成 (未實作)
 10. **Team Member Tasks** - 團隊成員任務 (3-4天)
     - 數據源: Task.assigneeId 統計
@@ -354,7 +361,8 @@
 2. **F1**: Sprint 類型選擇實作 - ✅ **已完成**
 3. **F2**: Gantt Auto Mode 優化 - ✅ **已完成**
 4. **Dashboard Drag & Drop**: Widget 拖拽重排功能 - ✅ **已完成**
-5. **Widgets**: Progress Chart, Task Distribution (簡單 widgets)
+5. **Widget 管理系統**: Available/Coming Soon 徽章系統 - ✅ **已完成**
+6. **Widgets**: Progress Chart, Task Distribution (簡單 widgets)
 
 ### Phase 2: 短期執行 (3-4週)
 **焦點**: 核心功能完善 + 測試覆蓋
@@ -385,7 +393,7 @@
 
 ## 🎯 關鍵里程碑
 
-- **Week 2**: ✅ Priority Bug 修復完成 + Sprint 類型功能完成 + Gantt Auto Mode 完成 + Dashboard Drag & Drop 完成
+- **Week 2**: ✅ Priority Bug 修復完成 + Sprint 類型功能完成 + Gantt Auto Mode 完成 + Dashboard Drag & Drop 完成 + Widget 管理系統完成
 - **Week 4**: Gantt Manual Mode MVP + 記憶體洩漏修復
 - **Week 8**: API 測試覆蓋 60% + 6個基礎 Widgets 完成
 - **Week 12**: 前端測試覆蓋 70% + 程式碼重構完成
@@ -445,6 +453,7 @@
 - **核心功能**: 95% 完成
 - **Dashboard Widgets**: 45% 完成 (9/20 widgets) ✅ **更新**
 - **Dashboard 功能**: 完整拖拽重排功能 ✅ **2025-07-19 完成**
+- **Widget 管理系統**: Available/Coming Soon 徽章系統 ✅ **2025-07-20 完成**
 - **測試覆蓋**: 5% 完成
 - **程式碼品質**: 良好，但有改進空間
 - **Widget 選擇器**: 已實作，支援 disabled 狀態和 preview 模式 ✅ **新增**
@@ -465,4 +474,4 @@
 *整合來源: dev.md, development_plan.md, plan.md, TASK.md*  
 *總任務數: 150+*  
 *預估總工時: 6-12個月 (依團隊規模)*
-*新增功能: Dashboard Widgets 系統、Widget 選擇器*
+*新增功能: Dashboard Widgets 系統、Widget 選擇器、Widget 管理系統*

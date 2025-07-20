@@ -567,61 +567,68 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent>
-                <DragDropContext onDragEnd={handleWidgetDragEnd}>
-                  <Droppable droppableId="widgets">
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-                      >
-                        {enabledWidgets.map((widgetConfig, index) => {
-                          const widget = widgetData.find(w => w.id === widgetConfig.id);
-                          if (!widget) return null;
-                          
-                          return (
-                            <Draggable key={widget.id} draggableId={widget.id} index={index}>
-                              {(provided, snapshot) => (
+                {/* Carousel Display - Show 4 widgets at a time */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {widgetData.slice(currentWidgetIndex * 4, currentWidgetIndex * 4 + 4).map((widget, index) => (
+                    <Card key={widget.id} className="text-center hover:shadow-md">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <div className={widget.color}>
+                            {widget.icon}
+                          </div>
+                          <h3 className="text-sm font-medium text-muted-foreground">
+                            {widget.title}
+                          </h3>
+                        </div>
+                        <div className={`text-2xl font-bold mb-1 ${widget.color}`}>
+                          {widget.value}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {widget.description}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Page indicators */}
+                {Math.ceil(enabledWidgets.length / 4) > 1 && (
+                  <div className="flex justify-center mt-4 gap-2">
+                    {Array.from({ length: Math.ceil(enabledWidgets.length / 4) }, (_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleWidgetClick(i)}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          i === currentWidgetIndex ? 'bg-primary' : 'bg-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Hidden drag-drop context for reordering (can be accessed via customize button) */}
+                <div className="hidden">
+                  <DragDropContext onDragEnd={handleWidgetDragEnd}>
+                    <Droppable droppableId="widgets">
+                      {(provided) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps}>
+                          {enabledWidgets.map((widgetConfig, index) => (
+                            <Draggable key={widgetConfig.id} draggableId={widgetConfig.id} index={index}>
+                              {(provided) => (
                                 <div
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
-                                  className={`transition-all duration-200 ${
-                                    snapshot.isDragging ? 'scale-105 rotate-3 z-50' : ''
-                                  }`}
-                                >
-                                  <Card className={`text-center cursor-move ${
-                                    snapshot.isDragging 
-                                      ? 'shadow-lg ring-2 ring-primary/50' 
-                                      : 'hover:shadow-md'
-                                  }`}>
-                                    <CardContent className="p-4">
-                                      <div className="flex items-center justify-center gap-2 mb-2">
-                                        <div className={widget.color}>
-                                          {widget.icon}
-                                        </div>
-                                        <h3 className="text-sm font-medium text-muted-foreground">
-                                          {widget.title}
-                                        </h3>
-                                      </div>
-                                      <div className={`text-2xl font-bold mb-1 ${widget.color}`}>
-                                        {widget.value}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">
-                                        {widget.description}
-                                      </p>
-                                    </CardContent>
-                                  </Card>
-                                </div>
+                                />
                               )}
                             </Draggable>
-                          );
-                        })}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
+                </div>
               </CardContent>
             </Card>
           )}

@@ -1,149 +1,76 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import * as React from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { calculateSprintHealth } from "@/lib/utils";
-import WidgetProvider from "@/components/WidgetProvider";
+import { format, differenceInDays, isPast, eachDayOfInterval, isWeekend } from "date-fns";
 import { useSession } from "next-auth/react";
+import { getMockTasksBySprintId, mockBusyHours } from "@/lib/mockData";
+import { sortByPriorityDescending } from "@/lib/priorityUtils";
+import { useSprint } from "@/context/SprintContext";
+import { WidgetSelector } from "@/components/WidgetSelector";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import WidgetProvider from "@/components/WidgetProvider";
 import {
-  TrendingUpIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  BarChart3Icon,
-  RefreshCwIcon,
-  LayoutDashboardIcon,
-  HeartIcon,
-  UsersIcon,
-  ZapIcon,
-  AlertTriangleIcon,
-  CalendarIcon,
-  GitBranchIcon,
-  MessageSquareIcon,
-  FileTextIcon,
-  TargetIcon,
-  TrendingDownIcon,
-} from "lucide-react";
+  TaskSummaryWidget,
+  TaskDistributionWidget,
+  RecentActivityWidget,
+  SprintCompletionWidget,
+  SprintProgressWidget,
+  WorkHoursWidget,
+  HoursSummaryWidget,
+  CalendarOverviewWidget,
+  ProgressChartWidget,
+  SprintHealthWidget,
+  VelocityWidget,
+  RiskAssessmentWidget,
+  BurndownChartWidget,
+  TeamWorkloadWidget,
+  CodeCommitsWidget,
+  TeamCommunicationWidget
+} from "@/components/widgets";
+import { LayoutDashboardIcon } from "lucide-react";
 
-interface DashboardData {
-  totalTasks: number;
-  completedTasks: number;
-  ongoingTasks: number;
-  totalHours: number;
-  completionRate: number;
-  burndownData?: number[];
-  sprintHealth?: {
-    totalHours: number;
-    completedHours: number;
-    consumedHours: number;
-    healthPercentage: number;
-  };
-  teamWorkload?: {
-    members: { name: string; workload: number; capacity: number }[];
-  };
-  velocity?: {
-    currentSprint: number;
-    previousSprint: number;
-    average: number;
-  };
-  riskAssessment?: {
-    level: "low" | "medium" | "high";
-    factors: string[];
-  };
+interface Sprint {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  iterations?: number;
+  defaultWorkHours?: { start: string; end: string };
+  defaultWorkDays?: number[];
 }
 
-interface WidgetProps {
+interface Task {
+  id: string;
+  status: string;
+  estimatedHours?: number;
+}
+
+interface BusyHour {
   id: string;
   title: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
+  startTime: string;
+  endTime: string;
+  userId: string;
+  categoryId: string;
 }
 
-interface WidgetContainerProps {
+
+interface WidgetConfig {
   id: string;
-  title: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-  onDragStart: (e: React.DragEvent, id: string) => void;
-  onDragOver: (e: React.DragEvent, id: string) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent, id: string) => void;
-  onDragEnd: () => void;
-  isDraggedOver: boolean;
-  isDragging: boolean;
 }
-
-const Widget: React.FC<WidgetContainerProps> = ({
-  id,
-  title,
-  icon,
-  children,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
-  isDraggedOver,
-  isDragging,
-}) => (
-  <div
-    key={id}
-    className={`h-full transition-all duration-200 ${
-      isDraggedOver ? "scale-105 ring-2 ring-blue-400" : ""
-    } ${isDragging ? "opacity-50" : ""}`}
-    draggable
-    onDragStart={(e) => onDragStart(e, id)}
-    onDragOver={(e) => onDragOver(e, id)}
-    onDragLeave={onDragLeave}
-    onDrop={(e) => onDrop(e, id)}
-    onDragEnd={onDragEnd}
-  >
-    <Card className="h-full cursor-move">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          {icon}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">{children}</CardContent>
-    </Card>
-  </div>
-);
 
 export default function DashboardPage() {
+  const { selectedSprint, loading: sprintLoading, refreshSprints } = useSprint();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [busyHours, setBusyHours] = useState<BusyHour[]>([]);
+  const [widgetSelectorOpen, setWidgetSelectorOpen] = useState(false);
+  const [enabledWidgets, setEnabledWidgets] = useState<WidgetConfig[]>([]);
   const { data: session } = useSession();
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
-    totalTasks: 0,
-    completedTasks: 0,
-    ongoingTasks: 0,
-    totalHours: 0,
-    completionRate: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [enabledWidgets, setEnabledWidgets] = useState<{ id: string }[]>([
-    { id: "completion-rate" },
-    { id: "task-summary" },
-    { id: "hours-summary" },
-    { id: "sprint-health" },
-    { id: "progress-chart" },
-    { id: "team-workload" },
-    { id: "velocity" },
-    { id: "risk-assessment" },
-    { id: "burndown" },
-    { id: "recent-activity" },
-    { id: "calendar-overview" },
-    { id: "code-commits" },
-    { id: "team-communication" },
-    { id: "project-documentation" },
-    { id: "performance-metrics" },
-    { id: "resource-usage" },
-  ]);
-  const [draggedItem, setDraggedItem] = useState<string | null>(null);
-  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
-  // Load saved widgets from localStorage
-  React.useEffect(() => {
+  useEffect(() => {
+    // Load enabled widgets from localStorage
     if (typeof window !== "undefined") {
       const savedWidgets = localStorage.getItem("enabledWidgets");
       if (savedWidgets) {
@@ -153,11 +80,69 @@ export default function DashboardPage() {
             setEnabledWidgets(parsed);
           }
         } catch (e) {
-          console.error("Error parsing saved widgets:", e);
+          console.error('Error parsing saved widgets:', e);
         }
+      } else {
+        // Default enabled widgets (ordered by priority)
+        const defaultWidgets = [
+          { id: "task-summary" },
+          { id: "completion-rate" },
+          { id: "work-hours" },
+          { id: "progress-chart" },
+          { id: "hours-summary" },
+          { id: "sprint-health" },
+          { id: "team-workload" }
+        ];
+        setEnabledWidgets(defaultWidgets);
       }
     }
   }, []);
+
+  const fetchTasksForSprint = useCallback(async (sprintId: string) => {
+    try {
+      if (!session) {
+        // Use mock data when not authenticated
+        const mockSprintTasks = getMockTasksBySprintId(sprintId);
+        console.log('Sprint switching: Loading', mockSprintTasks.length, 'tasks for sprint', sprintId);
+        setTasks(mockSprintTasks);
+        return;
+      }
+      
+      const response = await fetch(`/api/tasks?sprintId=${sprintId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch tasks:", error);
+    }
+  }, [session]);
+
+  const fetchBusyHours = useCallback(async () => {
+    try {
+      if (!session) {
+        // Use mock data when not authenticated
+        setBusyHours(mockBusyHours);
+        return;
+      }
+      
+      const response = await fetch("/api/user/busy-hours");
+      if (response.ok) {
+        const data = await response.json();
+        setBusyHours(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch busy hours:", error);
+    }
+  }, [session]);
+  
+
+  useEffect(() => {
+    if (selectedSprint) {
+      fetchTasksForSprint(selectedSprint.id);
+    }
+    fetchBusyHours();
+  }, [selectedSprint, fetchTasksForSprint, fetchBusyHours]);
 
   const handleWidgetToggle = (widgetId: string, enabled: boolean) => {
     setEnabledWidgets((prev) => {
@@ -172,151 +157,206 @@ export default function DashboardPage() {
     });
   };
 
-  const handleDragStart = (e: React.DragEvent, widgetId: string) => {
-    setDraggedItem(widgetId);
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const handleDragOver = (e: React.DragEvent, widgetId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverItem(widgetId);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverItem(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetWidgetId: string) => {
-    e.preventDefault();
-
-    if (draggedItem && draggedItem !== targetWidgetId) {
-      const newWidgets = [...enabledWidgets];
-      const draggedIndex = newWidgets.findIndex((w) => w.id === draggedItem);
-      const targetIndex = newWidgets.findIndex((w) => w.id === targetWidgetId);
-
-      // Remove dragged item and insert at target position
-      const [draggedWidget] = newWidgets.splice(draggedIndex, 1);
-      newWidgets.splice(targetIndex, 0, draggedWidget);
-
-      setEnabledWidgets(newWidgets);
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem("enabledWidgets", JSON.stringify(newWidgets));
+  // Calculate available hours within sprint
+  const calculateAvailableHours = useCallback(() => {
+    if (!selectedSprint) return { totalSprintHours: 0, busyHours: 0, availableHours: 0 };
+    
+    const sprintStart = new Date(selectedSprint.startDate);
+    const sprintEnd = new Date(selectedSprint.endDate);
+    
+    // Get all days in sprint
+    const sprintDays = eachDayOfInterval({ start: sprintStart, end: sprintEnd });
+    
+    // Calculate daily work hours from sprint configuration
+    const dailyWorkHours = (() => {
+      const workHours = selectedSprint.defaultWorkHours;
+      if (!workHours || !workHours.start || !workHours.end) {
+        return 8; // Fallback to 8 hours if not configured
       }
+      
+      const [startHour, startMinute] = workHours.start.split(':').map(Number);
+      const [endHour, endMinute] = workHours.end.split(':').map(Number);
+      
+      const startTimeInMinutes = startHour * 60 + startMinute;
+      const endTimeInMinutes = endHour * 60 + endMinute;
+      
+      return (endTimeInMinutes - startTimeInMinutes) / 60; // Convert to hours
+    })();
+    
+    // Calculate total available hours in sprint
+    const defaultWorkDays = selectedSprint.defaultWorkDays || [1, 2, 3, 4, 5]; // Default to Mon-Fri
+    const workDays = sprintDays.filter(day => {
+      const dayOfWeek = day.getDay();
+      // Convert Sunday (0) to 7 to match defaultWorkDays format (1=Mon, 7=Sun)
+      const dayNumber = dayOfWeek === 0 ? 7 : dayOfWeek;
+      return defaultWorkDays.includes(dayNumber);
+    });
+    const totalSprintHours = workDays.length * dailyWorkHours;
+    
+    // Calculate busy hours within sprint period
+    const sprintBusyHours = busyHours.filter(bh => {
+      const busyStart = new Date(bh.startTime);
+      return busyStart >= sprintStart && busyStart <= sprintEnd;
+    });
+    
+    const totalBusyHours = sprintBusyHours.reduce((total, bh) => {
+      const start = new Date(bh.startTime);
+      const end = new Date(bh.endTime);
+      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Convert ms to hours
+      return total + hours;
+    }, 0);
+    
+    const availableHours = Math.max(0, totalSprintHours - totalBusyHours);
+    
+    return {
+      totalSprintHours,
+      busyHours: totalBusyHours,
+      availableHours
+    };
+  }, [selectedSprint, busyHours]);
+
+  const totalDays = selectedSprint
+    ? differenceInDays(new Date(selectedSprint.endDate), new Date(selectedSprint.startDate)) + 1
+    : 0;
+  const remainingDays = selectedSprint
+    ? Math.max(0, differenceInDays(new Date(selectedSprint.endDate), new Date()) + 1)
+    : 0;
+  const elapsedDays = selectedSprint
+    ? Math.max(0, differenceInDays(new Date(), new Date(selectedSprint.startDate)) + 1)
+    : 0;
+  const progressPercentage = totalDays > 0 ? Math.min(100, (elapsedDays / totalDays) * 100) : 0;
+  
+  const completedTasks = tasks.filter((task) => task.status === "DONE").length;
+  const inProgressTasks = tasks.filter((task) => task.status === "IN_PROGRESS").length;
+  const reviewTasks = tasks.filter((task) => task.status === "REVIEW").length;
+  const todoTasks = tasks.filter((task) => task.status === "TODO").length;
+  const totalTasks = tasks.length;
+  const taskProgressPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  // Render widget components based on enabled widgets
+  const renderWidget = (widgetId: string, index: number) => {
+    const { totalSprintHours, busyHours: totalBusyHours, availableHours } = calculateAvailableHours();
+    
+    switch (widgetId) {
+      case 'task-summary':
+        return <TaskSummaryWidget key={widgetId} tasks={tasks} />;
+      
+      case 'task-distribution':
+        return <TaskDistributionWidget key={widgetId} tasks={tasks} />;
+      
+      case 'recent-activity':
+        return <RecentActivityWidget key={widgetId} tasks={tasks} />;
+      
+      case 'completion-rate':
+        return selectedSprint ? (
+          <SprintCompletionWidget 
+            key={widgetId} 
+            sprintStartDate={selectedSprint.startDate}
+            sprintEndDate={selectedSprint.endDate}
+          />
+        ) : null;
+      
+      case 'sprint-progress':
+        return selectedSprint ? (
+          <SprintProgressWidget 
+            key={widgetId} 
+            sprintStartDate={selectedSprint.startDate}
+            sprintEndDate={selectedSprint.endDate}
+          />
+        ) : null;
+      
+      case 'work-hours':
+        return (
+          <WorkHoursWidget 
+            key={widgetId} 
+            totalSprintHours={totalSprintHours}
+            busyHours={totalBusyHours}
+          />
+        );
+      
+      case 'hours-summary':
+        return <HoursSummaryWidget key={widgetId} tasks={tasks} />;
+      
+      case 'calendar-overview':
+        return <CalendarOverviewWidget key={widgetId} busyHours={busyHours} />;
+      
+      case 'progress-chart':
+        return <ProgressChartWidget key={widgetId} tasks={tasks} />;
+      
+      case 'sprint-health':
+        return <SprintHealthWidget key={widgetId} progressPercentage={progressPercentage} />;
+      
+      case 'velocity':
+        return <VelocityWidget key={widgetId} taskProgressPercentage={taskProgressPercentage} />;
+      
+      case 'risk-assessment':
+        return <RiskAssessmentWidget key={widgetId} progressPercentage={progressPercentage} />;
+      
+      case 'burndown':
+        return (
+          <BurndownChartWidget 
+            key={widgetId} 
+            totalTasks={totalTasks}
+            completedTasks={completedTasks}
+          />
+        );
+      
+      case 'team-workload':
+        return <TeamWorkloadWidget key={widgetId} tasks={tasks} />;
+      
+      case 'code-commits':
+        return <CodeCommitsWidget key={widgetId} />;
+      
+      case 'team-communication':
+        return <TeamCommunicationWidget key={widgetId} />;
+      
+      default:
+        return null;
+    }
+  };
+
+  const handleSaveWidgets = (selectedWidgetIds: string[]) => {
+    const newWidgets = selectedWidgetIds.map(id => ({ id }));
+    setEnabledWidgets(newWidgets);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("enabledWidgets", JSON.stringify(newWidgets));
+    }
+  };
+
+  const handleWidgetDragEnd = (result: any) => {
+    console.log('Drag ended:', result);
+    
+    if (!result.destination) {
+      console.log('No destination, drag cancelled');
+      return;
     }
 
-    setDraggedItem(null);
-    setDragOverItem(null);
-  };
+    if (result.source.index === result.destination.index) {
+      console.log('Same position, no change needed');
+      return;
+    }
 
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-    setDragOverItem(null);
-  };
+    const items = Array.from(enabledWidgets);
+    console.log('Before reorder:', items.map(w => w.id));
+    
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    
+    console.log('After reorder:', items.map(w => w.id));
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/dashboard/summary");
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardData(data);
-      } else {
-        // Fallback to mock data
-        setDashboardData({
-          totalTasks: 15,
-          completedTasks: 8,
-          ongoingTasks: 5,
-          totalHours: 120,
-          completionRate: 53,
-          burndownData: [100, 85, 70, 60, 45, 30, 15],
-          sprintHealth: {
-            totalHours: 80,
-            completedHours: 32,
-            consumedHours: 36,
-            healthPercentage: calculateSprintHealth(32, 36),
-          },
-          teamWorkload: {
-            members: [
-              { name: "Alice", workload: 32, capacity: 40 },
-              { name: "Bob", workload: 38, capacity: 40 },
-              { name: "Charlie", workload: 28, capacity: 40 },
-            ],
-          },
-          velocity: {
-            currentSprint: 24,
-            previousSprint: 20,
-            average: 22,
-          },
-          riskAssessment: {
-            level: "medium",
-            factors: ["Resource constraints", "Technical debt"],
-          },
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      // Fallback to mock data
-      setDashboardData({
-        totalTasks: 15,
-        completedTasks: 8,
-        ongoingTasks: 5,
-        totalHours: 120,
-        completionRate: 53,
-        burndownData: [100, 85, 70, 60, 45, 30, 15],
-        sprintHealth: {
-          totalHours: 80,
-          completedHours: 32,
-          consumedHours: 36,
-          healthPercentage: calculateSprintHealth(32, 36),
-        },
-        teamWorkload: {
-          members: [
-            { name: "Alice", workload: 32, capacity: 40 },
-            { name: "Bob", workload: 38, capacity: 40 },
-            { name: "Charlie", workload: 28, capacity: 40 },
-          ],
-        },
-        velocity: {
-          currentSprint: 24,
-          previousSprint: 20,
-          average: 22,
-        },
-        riskAssessment: {
-          level: "medium",
-          factors: ["Resource constraints", "Technical debt"],
-        },
-      });
-    } finally {
-      setLoading(false);
+    setEnabledWidgets(items);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("enabledWidgets", JSON.stringify(items));
+      console.log('Saved to localStorage:', items.map(w => w.id));
     }
   };
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  if (loading) {
+  if (sprintLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <LayoutDashboardIcon className="w-6 h-6" />
-            Dashboard
-          </h1>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                  <div className="h-8 bg-gray-200 rounded"></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading sprint information...</p>
         </div>
       </div>
     );
@@ -331,12 +371,9 @@ export default function DashboardPage() {
               <span className="text-white text-xs font-bold">📊</span>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-indigo-800">
-                Demo Mode - Dashboard
-              </h3>
+              <h3 className="text-sm font-medium text-indigo-800">Demo Mode - Dashboard</h3>
               <p className="text-xs text-indigo-700">
-                You're viewing demo analytics and widgets. Sign in to connect
-                your real project data and customize your dashboard.
+                You're viewing demo analytics and widgets. Sign in to connect your real project data and customize your dashboard.
               </p>
             </div>
           </div>
@@ -348,676 +385,52 @@ export default function DashboardPage() {
           <LayoutDashboardIcon className="w-6 h-6" />
           Dashboard
         </h1>
-        <div className="flex items-center gap-2">
-          <WidgetProvider
-            enabledWidgets={enabledWidgets}
-            onWidgetToggle={handleWidgetToggle}
-          />
-          <Button onClick={fetchDashboardData} variant="outline" size="sm">
-            <RefreshCwIcon className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+        <WidgetProvider
+          enabledWidgets={enabledWidgets}
+          onWidgetToggle={handleWidgetToggle}
+        />
       </div>
 
-      <div className="grid grid-cols-4 gap-4 auto-rows-fr">
-        {enabledWidgets.map((widget) => {
-          switch (widget.id) {
-            case "completion-rate":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Sprint Completion Rate"
-                  icon={<TrendingUpIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-primary mb-2">
-                      {dashboardData.completionRate}%
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+      {/* Draggable Widget Grid */}
+      {enabledWidgets.length > 0 && (
+        <DragDropContext onDragEnd={handleWidgetDragEnd}>
+          <Droppable droppableId="widgets">
+            {(provided) => (
+              <div 
+                ref={provided.innerRef} 
+                {...provided.droppableProps}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+              >
+                {enabledWidgets.map((widget, index) => (
+                  <Draggable key={widget.id} draggableId={widget.id} index={index}>
+                    {(provided, snapshot) => (
                       <div
-                        className="bg-primary h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${dashboardData.completionRate}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "task-summary":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Task Summary"
-                  icon={<CheckCircleIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        Total
-                      </span>
-                      <span className="font-medium">
-                        {dashboardData.totalTasks}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        Completed
-                      </span>
-                      <span className="font-medium text-green-600">
-                        {dashboardData.completedTasks}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        In Progress
-                      </span>
-                      <span className="font-medium text-blue-600">
-                        {dashboardData.ongoingTasks}
-                      </span>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "hours-summary":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Work Hours"
-                  icon={<ClockIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-primary mb-2">
-                      {dashboardData.totalHours}h
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Total Estimated
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "sprint-health":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Sprint Health"
-                  icon={<HeartIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="text-center">
-                    <div
-                      className="text-3xl font-bold mb-2"
-                      style={{
-                        color: dashboardData.sprintHealth
-                          ? dashboardData.sprintHealth.healthPercentage >= 90
-                            ? "#10b981"
-                            : dashboardData.sprintHealth.healthPercentage >= 70
-                            ? "#f59e0b"
-                            : "#ef4444"
-                          : "#6b7280",
-                      }}
-                    >
-                      {dashboardData.sprintHealth?.healthPercentage || 0}%
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span>Total:</span>
-                        <span>
-                          {dashboardData.sprintHealth?.totalHours || 0}h
-                        </span>
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className={`transition-all duration-200 ${
+                          snapshot.isDragging ? "scale-105 rotate-2 shadow-lg z-50" : ""
+                        }`}
+                      >
+                        {renderWidget(widget.id, index)}
                       </div>
-                      <div className="flex justify-between">
-                        <span>Completed:</span>
-                        <span className="text-green-600">
-                          {dashboardData.sprintHealth?.completedHours || 0}h
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Consumed:</span>
-                        <span className="text-blue-600">
-                          {dashboardData.sprintHealth?.consumedHours || 0}h
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "progress-chart":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Progress Overview"
-                  icon={<BarChart3Icon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>Done</span>
-                      <span>
-                        {Math.round(
-                          (dashboardData.completedTasks /
-                            dashboardData.totalTasks) *
-                            100
-                        )}
-                        %
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-green-500 h-2 rounded-full"
-                        style={{
-                          width: `${
-                            (dashboardData.completedTasks /
-                              dashboardData.totalTasks) *
-                            100
-                          }%`,
-                        }}
-                      ></div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-sm">
-                      <span>In Progress</span>
-                      <span>
-                        {Math.round(
-                          (dashboardData.ongoingTasks /
-                            dashboardData.totalTasks) *
-                            100
-                        )}
-                        %
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-500 h-2 rounded-full"
-                        style={{
-                          width: `${
-                            (dashboardData.ongoingTasks /
-                              dashboardData.totalTasks) *
-                            100
-                          }%`,
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "team-workload":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Team Workload"
-                  icon={<UsersIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2">
-                    {dashboardData.teamWorkload?.members.map(
-                      (member, index) => (
-                        <div key={index} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span>{member.name}</span>
-                            <span>
-                              {member.workload}h/{member.capacity}h
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div
-                              className={`h-1.5 rounded-full transition-all duration-300 ${
-                                member.workload > member.capacity
-                                  ? "bg-red-500"
-                                  : member.workload > member.capacity * 0.8
-                                  ? "bg-yellow-500"
-                                  : "bg-green-500"
-                              }`}
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  (member.workload / member.capacity) * 100
-                                )}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      )
                     )}
-                  </div>
-                </Widget>
-              );
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+      )}
 
-            case "velocity":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Sprint Velocity"
-                  icon={<ZapIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary mb-2">
-                      {dashboardData.velocity?.currentSprint || 0}
-                    </div>
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Story Points
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span>Previous:</span>
-                        <span>
-                          {dashboardData.velocity?.previousSprint || 0}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Average:</span>
-                        <span>{dashboardData.velocity?.average || 0}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Trend:</span>
-                        <span
-                          className={
-                            (dashboardData.velocity?.currentSprint || 0) >
-                            (dashboardData.velocity?.previousSprint || 0)
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }
-                        >
-                          {(dashboardData.velocity?.currentSprint || 0) >
-                          (dashboardData.velocity?.previousSprint || 0)
-                            ? "↗"
-                            : "↘"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "risk-assessment":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Risk Assessment"
-                  icon={<AlertTriangleIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="text-center">
-                    <div
-                      className={`text-2xl font-bold mb-2 ${
-                        dashboardData.riskAssessment?.level === "high"
-                          ? "text-red-500"
-                          : dashboardData.riskAssessment?.level === "medium"
-                          ? "text-yellow-500"
-                          : "text-green-500"
-                      }`}
-                    >
-                      {dashboardData.riskAssessment?.level?.toUpperCase() ||
-                        "LOW"}
-                    </div>
-                    <div className="text-xs space-y-1">
-                      {dashboardData.riskAssessment?.factors.map(
-                        (factor, index) => (
-                          <div key={index} className="text-muted-foreground">
-                            • {factor}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "burndown":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Burn Down Chart"
-                  icon={<TrendingUpIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="h-32 flex items-end space-x-1">
-                    {dashboardData.burndownData?.map((value, index) => (
-                      <div
-                        key={index}
-                        className="flex-1 bg-primary rounded-t opacity-80 hover:opacity-100 transition-opacity"
-                        style={{ height: `${(value / 100) * 100}%` }}
-                        title={`Day ${index + 1}: ${value} tasks remaining`}
-                      ></div>
-                    ))}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2 text-center">
-                    Tasks remaining over time
-                  </div>
-                </Widget>
-              );
-
-            case "recent-activity":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Recent Activity"
-                  icon={<CheckCircleIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">
-                          Task completed
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Design Database Schema
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">Task started</div>
-                        <div className="text-xs text-muted-foreground">
-                          Implement Authentication
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">Task created</div>
-                        <div className="text-xs text-muted-foreground">
-                          Setup CI/CD Pipeline
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "calendar-overview":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Calendar Overview"
-                  icon={<CalendarIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <span>Sprint Demo - Tomorrow</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      <span>Code Review - Today 3PM</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span>Team Meeting - Friday</span>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "code-commits":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Code Commits"
-                  icon={<GitBranchIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Today</span>
-                      <span className="font-bold text-green-600">12</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>This Week</span>
-                      <span className="font-bold text-blue-600">47</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Last Commit</span>
-                      <span className="text-muted-foreground">2h ago</span>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "team-communication":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Team Communication"
-                  icon={<MessageSquareIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
-                        A
-                      </div>
-                      <span>New bug report filed</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">
-                        B
-                      </div>
-                      <span>PR approved & merged</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs">
-                        C
-                      </div>
-                      <span>Design review complete</span>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "project-documentation":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Project Documentation"
-                  icon={<FileTextIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>API Docs</span>
-                      <span className="text-green-600">Updated</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>User Guide</span>
-                      <span className="text-yellow-600">Review</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>README</span>
-                      <span className="text-blue-600">Complete</span>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "performance-metrics":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Performance Metrics"
-                  icon={<TargetIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Response Time</span>
-                      <span className="font-bold text-green-600">145ms</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Uptime</span>
-                      <span className="font-bold text-green-600">99.9%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Error Rate</span>
-                      <span className="font-bold text-red-600">0.1%</span>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            case "resource-usage":
-              return (
-                <Widget
-                  key={widget.id}
-                  id={widget.id}
-                  title="Resource Usage"
-                  icon={<TrendingDownIcon className="w-4 h-4" />}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverItem === widget.id}
-                  isDragging={draggedItem === widget.id}
-                >
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>CPU</span>
-                      <span className="font-bold">24%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div
-                        className="bg-blue-500 h-1.5 rounded-full"
-                        style={{ width: "24%" }}
-                      ></div>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Memory</span>
-                      <span className="font-bold">67%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div
-                        className="bg-yellow-500 h-1.5 rounded-full"
-                        style={{ width: "67%" }}
-                      ></div>
-                    </div>
-                  </div>
-                </Widget>
-              );
-
-            default:
-              return null;
-          }
-        })}
-      </div>
+      {/* Widget Selector Dialog */}
+      <WidgetSelector
+        isOpen={widgetSelectorOpen}
+        setIsOpen={setWidgetSelectorOpen}
+        enabledWidgets={enabledWidgets.map(w => w.id)}
+        onSave={handleSaveWidgets}
+      />
     </div>
   );
 }
