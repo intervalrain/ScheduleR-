@@ -596,16 +596,16 @@ export default function GanttPage() {
       const sprintEndDateTime = new Date(selectedSprint.endDate);
       sprintEndDateTime.setHours(23, 59, 59, 0); // End of day
       
-      // Make it just 1 minute duration for a thin line effect
-      const sprintEndStartTime = new Date(sprintEndDateTime.getTime() - 60000); // 1 minute before
+      // Make it 30 minutes duration for a thicker line effect
+      const sprintEndStartTime = new Date(sprintEndDateTime.getTime() - 1800000); // 30 minutes before
       
       rows.push([
         'sprint-end',
-        `⚠️ SPRINT DEADLINE (${actualSprintEndDate.toLocaleDateString()}) ⚠️`,
+        `🔴 SPRINT DEADLINE (${actualSprintEndDate.toLocaleDateString()}) 🔴`,
         'SPRINT_END',
         sprintEndStartTime,
         sprintEndDateTime,
-        60000, // 1 minute duration = thin line
+        1800000, // 30 minutes duration = thicker line
         100,
         null
       ]);
@@ -667,7 +667,7 @@ export default function GanttPage() {
         spaceAfter: 4
       }
     },
-    colors: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ff0000'],
+    colors: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#dc2626'],
     colorByRowLabel: true,
     backgroundColor: '#fff',
     explorer: {
