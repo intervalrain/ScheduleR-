@@ -58,6 +58,7 @@ interface Task {
   status: string;
   createdAt: string;
   updatedAt: string;
+  closeTime?: string;
   assignee?: User;
   createdBy?: User;
   subTasks?: SubTask[];
@@ -102,7 +103,8 @@ export default function WorkspacePage() {
     status: '',
     priority: 0,
     estimatedHours: 0,
-    assigneeId: ''
+    assigneeId: '',
+    closeTime: ''
   });
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   
@@ -137,7 +139,8 @@ export default function WorkspacePage() {
         status: task.status || '',
         priority: task.priority || 0,
         estimatedHours: task.estimatedHours || 0,
-        assigneeId: task.assignee?.id || ''
+        assigneeId: task.assignee?.id || '',
+        closeTime: task.closeTime ? new Date(task.closeTime).toISOString().slice(0, 16) : ''
       });
     }
   }, [task]);
@@ -205,7 +208,8 @@ export default function WorkspacePage() {
         status: editForm.status,
         priority: editForm.priority,
         estimatedHours: editForm.estimatedHours,
-        assigneeId: editForm.assigneeId || null
+        assigneeId: editForm.assigneeId || null,
+        closeTime: editForm.closeTime ? new Date(editForm.closeTime).toISOString() : null
       };
 
       const response = await fetch(`/api/workspace/task/${task.id}`, {
@@ -614,6 +618,18 @@ export default function WorkspacePage() {
                     </Select>
                   </div>
                 </div>
+
+                {/* Time tracking fields */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Close Time</label>
+                    <Input
+                      type="datetime-local"
+                      value={editForm.closeTime}
+                      onChange={(e) => setEditForm({...editForm, closeTime: e.target.value})}
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">When task was completed</p>
+                </div>
               </div>
             ) : (
               <div>
@@ -738,6 +754,19 @@ export default function WorkspacePage() {
                 </div>
               </div>
             </div>
+
+            {/* Time Tracking Information */}
+            {task.closeTime && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center gap-2">
+                  <CheckIcon className="w-4 h-4 text-green-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Completed</p>
+                    <p className="text-sm">{formatDate(task.closeTime)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
