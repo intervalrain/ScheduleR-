@@ -27,7 +27,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // Check if user has permission to update this task
     const existingTask = await prisma.task.findUnique({
       where: { id },
-      select: { createdById: true, assigneeId: true, status: true, startReviewTime: true, closeTime: true }
+      select: { createdById: true, assigneeId: true, status: true, closeTime: true }
     });
 
     if (!existingTask) {
@@ -45,17 +45,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       const now = new Date();
       
       // Status change logic for time tracking
-      if (status === 'REVIEW' && (existingTask.status === 'TODO' || existingTask.status === 'IN_PROGRESS')) {
-        // Task moved to REVIEW - record start_review_time
-        timeTrackingUpdates = { startReviewTime: now };
-      } else if (status === 'DONE') {
-        if (existingTask.status === 'REVIEW') {
-          // Task moved from REVIEW to DONE - record close_time only
-          timeTrackingUpdates = { closeTime: now };
-        } else if (existingTask.status === 'TODO' || existingTask.status === 'IN_PROGRESS') {
-          // Task moved directly from TODO/IN_PROGRESS to DONE - record both timestamps
-          timeTrackingUpdates = { startReviewTime: now, closeTime: now };
-        }
+      if (status === 'DONE') {
+        // Task moved to DONE - record close_time
+        timeTrackingUpdates = { closeTime: now };
       }
     }
 
