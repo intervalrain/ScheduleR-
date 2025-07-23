@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTaskRefresh } from "@/context/TaskContext";
 import { useSprint } from "@/context/SprintContext";
+import { useMultiSelect } from "@/context/MultiSelectContext";
 import { getMockTasksBySprintId, getMockSubTasksByTaskId } from "@/lib/mockData";
 import { sortByPriorityDescending, calculateDragPriority, needsRebalancing, rebalancePriorities, INITIAL_PRIORITY } from "@/lib/priorityUtils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,7 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DeleteTaskDialog } from "@/components/DeleteTaskDialog";
-import { ClockIcon, UserIcon, Trash2Icon, MoreVerticalIcon } from "lucide-react";
+import { BulkMoveToolbar } from "@/components/BulkMoveToolbar";
+import { ClockIcon, UserIcon, Trash2Icon, MoreVerticalIcon, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,10 +49,18 @@ export default function KanbanPage() {
   const router = useRouter();
   const { refreshTrigger, triggerRefresh, deletedTaskIds } = useTaskRefresh();
   const { selectedSprintId } = useSprint();
+  const { 
+    isMultiSelectMode, 
+    setMultiSelectMode, 
+    toggleTaskSelection, 
+    isTaskSelected 
+  } = useMultiSelect();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [sprints, setSprints] = useState<Array<{id: string, name: string}>>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<{id: string, title: string} | null>(null);
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Filter out deleted tasks
   const filteredTasks = tasks.filter(task => !deletedTaskIds.includes(task.id));
@@ -58,6 +69,7 @@ export default function KanbanPage() {
     if (selectedSprintId) {
       fetchTasks();
     }
+    fetchSprints();
   }, [session, selectedSprintId, refreshTrigger]);
 
   const fetchTasks = async () => {
@@ -129,6 +141,28 @@ export default function KanbanPage() {
     }
   };
 
+  const fetchSprints = async () => {
+    try {
+      if (!session) {
+        // Use mock sprints when not authenticated
+        setSprints([
+          { id: 'sprint-1', name: 'Sprint 1' },
+          { id: 'sprint-2', name: 'Sprint 2' },
+          { id: 'sprint-3', name: 'Sprint 3' }
+        ]);
+        return;
+      }
+
+      const response = await fetch('/api/sprints');
+      if (response.ok) {
+        const fetchedSprints = await response.json();
+        setSprints(fetchedSprints);
+      }
+    } catch (error) {
+      console.error('Error fetching sprints:', error);
+    }
+  };
+
   const onDragEnd = async (result: {
     destination?: { droppableId: string; index: number } | null;
     source: { droppableId: string; index: number };
@@ -136,9 +170,9 @@ export default function KanbanPage() {
   }) => {
     const { destination, source, draggableId } = result;
 
-    // Disable drag operations when not authenticated
-    if (!session) {
-      console.log('Not authenticated, canceling drag operation');
+    // Disable drag operations when not authenticated or in multi-select mode
+    if (!session || isMultiSelectMode) {
+      console.log('Not authenticated or in multi-select mode, canceling drag operation');
       return;
     }
 
@@ -256,7 +290,14 @@ export default function KanbanPage() {
     return 'secondary'; // Low priority
   };
 
-  const handleTaskClick = (taskId: string) => {
+  const handleTaskClick = (taskId: string, event?: React.MouseEvent) => {
+    // Handle multi-select mode
+    if (isMultiSelectMode) {
+      event?.stopPropagation();
+      toggleTaskSelection(taskId);
+      return;
+    }
+
     // Disable task navigation when not authenticated
     if (!session) {
       console.log('Not authenticated, task click disabled');
@@ -265,6 +306,31 @@ export default function KanbanPage() {
     
     console.log('Kanban: Task clicked:', taskId, 'Type:', typeof taskId);
     router.push(`/workspace/${taskId}`);
+  };
+
+  const handleLongPress = (taskId: string) => {
+    if (!session) return;
+    
+    // Enter multi-select mode and select the task
+    setMultiSelectMode(true);
+    toggleTaskSelection(taskId);
+  };
+
+  const handleMouseDown = (taskId: string) => {
+    if (!session || isMultiSelectMode) return;
+    
+    const timer = setTimeout(() => {
+      handleLongPress(taskId);
+    }, 800); // 800ms for long press
+    
+    setLongPressTimer(timer);
+  };
+
+  const handleMouseUp = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
   };
 
   const handleDeleteTask = (task: Task) => {
@@ -346,8 +412,19 @@ export default function KanbanPage() {
       
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Kanban Board</h1>
-        <div className="text-sm text-muted-foreground">
-          {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} total
+        <div className="flex items-center gap-4">
+          {session && (
+            <Button
+              variant={isMultiSelectMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMultiSelectMode(!isMultiSelectMode)}
+            >
+              {isMultiSelectMode ? "取消選擇" : "選擇"}
+            </Button>
+          )}
+          <div className="text-sm text-muted-foreground">
+            {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} total
+          </div>
         </div>
       </div>
       
@@ -379,29 +456,51 @@ export default function KanbanPage() {
                       }`}
                     >
                       {statusTasks.map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                        <Draggable 
+                          key={task.id} 
+                          draggableId={task.id} 
+                          index={index}
+                          isDragDisabled={!session || isMultiSelectMode}
+                        >
                           {(provided, snapshot) => (
                             <Card
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`transition-shadow ${
+                              className={`transition-all ${
                                 !session 
                                   ? 'opacity-75 cursor-not-allowed hover:shadow-none' 
                                   : 'hover:shadow-md cursor-pointer'
                               } ${
                                 snapshot.isDragging ? 'shadow-lg rotate-2' : ''
+                              } ${
+                                isMultiSelectMode && isTaskSelected(task.id) 
+                                  ? 'ring-2 ring-blue-500 bg-blue-50' 
+                                  : ''
                               }`}
-                              onClick={() => {
+                              onClick={(event) => {
                                 // Only navigate if not dragging
                                 if (!snapshot.isDragging) {
-                                  handleTaskClick(task.id);
+                                  handleTaskClick(task.id, event);
                                 }
                               }}
+                              onMouseDown={() => handleMouseDown(task.id)}
+                              onMouseUp={handleMouseUp}
+                              onMouseLeave={handleMouseUp}
                             >
                               <CardContent className="p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
-                                  <h3 className="font-medium leading-tight flex-1">{task.title}</h3>
+                                  <div className="flex items-start gap-2 flex-1">
+                                    {isMultiSelectMode && (
+                                      <Checkbox
+                                        checked={isTaskSelected(task.id)}
+                                        onCheckedChange={() => toggleTaskSelection(task.id)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="mt-1"
+                                      />
+                                    )}
+                                    <h3 className="font-medium leading-tight flex-1">{task.title}</h3>
+                                  </div>
                                   <div className="flex items-center gap-1 shrink-0">
                                     {task.priority && task.priority < 700000 && (
                                       <Badge 
@@ -520,6 +619,9 @@ export default function KanbanPage() {
         task={taskToDelete}
         onTaskDeleted={handleTaskDeleted}
       />
+
+      {/* Bulk Move Toolbar */}
+      <BulkMoveToolbar sprints={sprints} />
     </div>
   );
 }

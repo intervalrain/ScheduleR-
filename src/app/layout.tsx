@@ -7,9 +7,11 @@ import { NewTaskDialogProvider, useNewTaskDialog } from "@/components/NewTaskDia
 import { TaskProvider } from "@/context/TaskContext";
 import { SprintProvider } from "@/context/SprintContext";
 import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
+import { MultiSelectProvider } from "@/context/MultiSelectContext";
 import { useHotkeys } from "react-hotkeys-hook";
 import { CommandPalette } from "@/components/CommandPalette";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/toaster";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 
@@ -56,6 +58,7 @@ function AppProviders({ children }: { children: React.ReactNode }) {
           </main>
         </div>
         <CommandPalette />
+        <Toaster />
       </div>
     </TooltipProvider>
   );
@@ -74,11 +77,13 @@ export default function RootLayout({
         <SessionProvider>
           <SprintProvider>
             <TaskProvider>
-              <SidebarProvider>
-                <NewTaskDialogProvider>
-                  <AppProviders>{children}</AppProviders>
-                </NewTaskDialogProvider>
-              </SidebarProvider>
+              <MultiSelectProvider>
+                <SidebarProvider>
+                  <NewTaskDialogProvider>
+                    <AppProviders>{children}</AppProviders>
+                  </NewTaskDialogProvider>
+                </SidebarProvider>
+              </MultiSelectProvider>
             </TaskProvider>
           </SprintProvider>
         </SessionProvider>
