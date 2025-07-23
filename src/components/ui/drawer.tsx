@@ -81,15 +81,28 @@ interface DrawerContentProps {
 const DrawerContent = ({ className, children }: DrawerContentProps) => {
   const { open, onOpenChange } = useDrawer();
   
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    // Check if the click is on a table row (which should switch tasks, not close)
+    const target = e.target as HTMLElement;
+    const isTableRow = target.closest('[role="row"]') || target.closest('tr');
+    
+    // Only close if not clicking on a table row
+    if (!isTableRow) {
+      onOpenChange(false);
+    }
+  };
+  
   return (
     <>
-      {/* Overlay */}
+      {/* Invisible overlay for click outside to close, but allow clicks on the left side for the list */}
       <div 
         className={cn(
-          "fixed inset-0 z-40 bg-black/80 transition-opacity duration-500",
-          open ? "opacity-100" : "opacity-0 pointer-events-none"
+          "fixed inset-0 z-40 transition-opacity duration-500",
+          open ? "opacity-100" : "opacity-0 pointer-events-none",
+          // Make the overlay only cover the area not occupied by the drawer
+          "right-[600px]"
         )}
-        onClick={() => onOpenChange(false)}
+        onClick={handleOverlayClick}
       />
       
       {/* Drawer Content - slide from right */}

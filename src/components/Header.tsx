@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { NewSprintDialog } from "./NewSprintDialog";
 import { useNewTaskDialog } from "./NewTaskDialogProvider";
+import { CSVImportDialog } from "./CSVImportDialog";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { 
@@ -23,7 +24,8 @@ import {
   LayoutDashboardIcon,
   UserIcon,
   LogOutIcon,
-  TrashIcon 
+  TrashIcon,
+  ListIcon 
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -37,6 +39,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navigationTabs = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },
   { id: "kanban", label: "Kanban", href: "/kanban", icon: Columns3Icon },
+  { id: "list", label: "List", href: "/list", icon: ListIcon },
   { id: "gantt", label: "Gantt", href: "/gantt", icon: BarChart3Icon },
   { id: "calendar", label: "Calendar", href: "/calendar", icon: CalendarIcon },
   { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon },
@@ -182,6 +185,7 @@ export default function Header() {
         
         {/* Right section */}
         <div className="flex items-center gap-3 justify-end">
+          <CSVImportDialog />
           <Button 
             onClick={() => openNewTaskDialog(selectedSprintId || undefined)} 
             className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-medium"

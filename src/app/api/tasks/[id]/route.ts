@@ -4,6 +4,88 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user || !session.user.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const { title, description, status, assigneeId, priority, estimatedHours, labels, tags } = await request.json();
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    const existingTask = await prisma.task.findUnique({
+      where: { id },
+      select: { createdById: true, assigneeId: true, status: true, closeTime: true }
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    if (existingTask.createdById !== user.id && existingTask.assigneeId !== user.id) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    let timeTrackingUpdates = {};
+    if (status && status !== existingTask.status) {
+      const now = new Date();
+      if (status === 'DONE') {
+        timeTrackingUpdates = { closeTime: now };
+      }
+    }
+
+    const updatedTask = await prisma.task.update({
+      where: { id },
+      data: {
+        ...(title && { title }),
+        ...(description !== undefined && { description }),
+        ...(status && { status }),
+        ...(priority !== undefined && { priority: typeof priority === 'string' ? parseInt(priority) : priority }),
+        ...(labels && { labels }),
+        ...(tags && { tags }),
+        ...(estimatedHours !== undefined && { estimatedHours }),
+        ...(assigneeId && { assignee: { connect: { id: assigneeId } } }),
+        ...(assigneeId === null && { assignee: { disconnect: true } }),
+        ...timeTrackingUpdates,
+      },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(updatedTask);
+  } catch (error) {
+    console.error('Error updating task:', error);
+    return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
+  }
+}
+
+
 // PUT /api/tasks/{id}
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);

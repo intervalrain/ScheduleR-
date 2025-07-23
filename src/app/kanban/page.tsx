@@ -502,14 +502,6 @@ export default function KanbanPage() {
                                     <h3 className="font-medium leading-tight flex-1">{task.title}</h3>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
-                                    {task.priority && task.priority < 700000 && (
-                                      <Badge 
-                                        variant={getPriorityColor(task.priority) as 'default' | 'destructive' | 'secondary' | 'outline'}
-                                        className="text-xs"
-                                      >
-                                        High Priority
-                                      </Badge>
-                                    )}
                                     {session && (
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -567,12 +559,10 @@ export default function KanbanPage() {
                                     )}
                                   </div>
                                   
-                                  {task.estimatedHours && (
-                                    <div className="flex items-center gap-1 text-muted-foreground">
-                                      <ClockIcon className="w-3 h-3" />
-                                      <span className="text-xs">{task.estimatedHours}h</span>
-                                    </div>
-                                  )}
+                                  <div className="flex items-center gap-1 text-muted-foreground">
+                                    <ClockIcon className="w-3 h-3" />
+                                    <span className="text-xs">{task.estimatedHours || 0}h</span>
+                                  </div>
                                 </div>
                                 
                                 {/* Progress bar for subtasks completion */}
