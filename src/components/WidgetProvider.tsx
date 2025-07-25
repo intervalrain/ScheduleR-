@@ -135,15 +135,14 @@ const availableWidgets: WidgetItem[] = [
     status: 'completed'
   },
   
-  // Coming Soon widgets (preview/future)
   {
     id: "sprint-health",
     title: "Sprint Health",
-    description: "Health indicator based on completed vs consumed hours",
+    description: "Comprehensive health metric combining task completion, schedule performance, task flow, and time buffer",
     icon: <HeartIcon className="w-4 h-4" />,
-    category: "Health",
+    category: "Analytics",
     enabled: true,
-    status: 'preview'
+    status: 'completed'
   },
   {
     id: "team-workload",

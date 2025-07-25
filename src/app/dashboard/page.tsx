@@ -284,7 +284,14 @@ export default function DashboardPage() {
         return <ProgressChartWidget key={widgetId} tasks={tasks} />;
       
       case 'sprint-health':
-        return <SprintHealthWidget key={widgetId} progressPercentage={progressPercentage} />;
+        return selectedSprint ? (
+          <SprintHealthWidget 
+            key={widgetId} 
+            sprintStartDate={selectedSprint.startDate}
+            sprintEndDate={selectedSprint.endDate}
+            tasks={tasks}
+          />
+        ) : null;
       
       case 'velocity':
         return <VelocityWidget key={widgetId} taskProgressPercentage={taskProgressPercentage} />;

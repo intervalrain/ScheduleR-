@@ -400,13 +400,33 @@ export default function Home() {
           });
           break;
         case 'sprint-health':
+          // Sprint Health calculation
+          const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+          const idealCompletionRate = (elapsedDays / totalDays) * 100;
+          const schedulePerformance = 100 - Math.abs(idealCompletionRate - taskCompletionRate);
+          const taskFlowRate = totalTasks > 0 ? (inProgressTasks / totalTasks) * 100 : 0;
+          const taskFlowScore = taskFlowRate > 30 ? 70 : 100;
+          const timeBufferScore = (remainingDays / totalDays) * 100;
+          
+          const overallHealth = 
+            (taskCompletionRate * 0.4) + 
+            (schedulePerformance * 0.3) + 
+            (taskFlowScore * 0.2) + 
+            (timeBufferScore * 0.1);
+          
+          const healthStatus = overallHealth >= 85 ? 'Excellent' : 
+                              overallHealth >= 70 ? 'Good' : 
+                              overallHealth >= 50 ? 'Fair' : 'Poor';
+          const healthColor = overallHealth >= 70 ? 'text-green-600' : 
+                             overallHealth >= 50 ? 'text-yellow-600' : 'text-red-600';
+          
           widgets.push({
             id: 'sprint-health',
             title: 'Sprint Health',
             icon: <HeartIcon className="w-4 h-4" />,
-            value: progressPercentage > 80 ? 'Excellent' : progressPercentage > 60 ? 'Good' : progressPercentage > 40 ? 'Fair' : 'Poor',
-            description: 'Sprint progress',
-            color: progressPercentage > 60 ? 'text-green-600' : progressPercentage > 40 ? 'text-yellow-600' : 'text-red-600'
+            value: healthStatus,
+            description: `${Math.round(overallHealth)}% overall health`,
+            color: healthColor
           });
           break;
         case 'team-workload':
