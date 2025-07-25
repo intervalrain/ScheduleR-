@@ -300,13 +300,15 @@ export default function DashboardPage() {
         return <RiskAssessmentWidget key={widgetId} progressPercentage={progressPercentage} />;
       
       case 'burndown':
-        return (
+        return selectedSprint ? (
           <BurndownChartWidget 
             key={widgetId} 
-            totalTasks={totalTasks}
-            completedTasks={completedTasks}
+            sprintId={selectedSprint.id}
+            sprintName={selectedSprint.name}
+            sprintStartDate={selectedSprint.startDate}
+            sprintEndDate={selectedSprint.endDate}
           />
-        );
+        ) : null;
       
       case 'team-workload':
         return <TeamWorkloadWidget key={widgetId} tasks={tasks} />;

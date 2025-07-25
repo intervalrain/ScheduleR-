@@ -19,8 +19,8 @@ export function CodeCommitsWidget({ className }: CodeCommitsWidgetProps) {
   const mockCommits = 42;
 
   return (
-    <Card className={`text-center cursor-move hover:shadow-md opacity-60 ${className}`}>
-      <CardContent className="p-4">
+    <Card className={`text-center cursor-move hover:shadow-md opacity-60 h-48 ${className}`}>
+      <CardContent className="p-4 h-full flex flex-col justify-center">
         <div className="flex items-center justify-center gap-2 mb-2">
           <div className="text-gray-600">
             <GitBranchIcon className="w-4 h-4" />

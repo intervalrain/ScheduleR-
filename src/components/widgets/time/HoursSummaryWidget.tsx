@@ -24,8 +24,8 @@ export function HoursSummaryWidget({ tasks, className }: HoursSummaryWidgetProps
   const totalHours = tasks.reduce((sum, task) => sum + (task.estimatedHours || 0), 0);
 
   return (
-    <Card className={`text-center cursor-move hover:shadow-md ${className}`}>
-      <CardContent className="p-4">
+    <Card className={`text-center cursor-move hover:shadow-md h-48 ${className}`}>
+      <CardContent className="p-4 h-full flex flex-col justify-center">
         <div className="flex items-center justify-center gap-2 mb-2">
           <div className="text-purple-600">
             <ClockIcon className="w-4 h-4" />

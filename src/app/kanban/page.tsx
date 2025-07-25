@@ -419,7 +419,7 @@ export default function KanbanPage() {
               size="sm"
               onClick={() => setMultiSelectMode(!isMultiSelectMode)}
             >
-              {isMultiSelectMode ? "取消選擇" : "選擇"}
+              {isMultiSelectMode ? "Cancel Select" : "Select"}
             </Button>
           )}
           <div className="text-sm text-muted-foreground">

@@ -174,11 +174,11 @@ const availableWidgets: WidgetItem[] = [
   {
     id: "burndown",
     title: "Burndown Chart",
-    description: "Shows remaining work over time",
-    icon: <TrendingUpIcon className="w-4 h-4" />,
-    category: "Progress",
+    description: "Interactive chart showing remaining work over time with trend analysis",
+    icon: <TrendingDownIcon className="w-4 h-4" />,
+    category: "Analytics",
     enabled: true,
-    status: 'preview'
+    status: 'completed'
   },
   {
     id: "code-commits",

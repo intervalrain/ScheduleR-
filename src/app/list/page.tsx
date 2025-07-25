@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Save, X, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -75,7 +74,6 @@ export default function ListPage() {
   const { toast } = useToast();
   const { selectedSprint } = useSprint();
   const { triggerRefresh, refreshTrigger } = useTaskRefresh();
-  const { openNewTaskDialog } = useNewTaskDialog();
 
   useEffect(() => {
     if (selectedSprint) {
@@ -265,10 +263,6 @@ export default function ListPage() {
             {selectedSprint.name} - {tasks.length} task{tasks.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button onClick={() => openNewTaskDialog(selectedSprint.id)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Task
-        </Button>
       </div>
 
       {loading ? (
